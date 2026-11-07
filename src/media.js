@@ -174,7 +174,7 @@ export function initMedia() {
     '25mb': { format: 'mp4', size: 'target', target: 24, height: '' },
     mp4: { format: 'mp4', size: 'quality', crf: '23', height: '' },
     gif: { format: 'gif', fps: 12, height: '' },
-    mp3: { format: 'mp3', abr: '192k' },
+    mp3: { format: 'mp3', abr: '128k' },
   };
   $('#media-presets').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-p]'); if (!b) return;
