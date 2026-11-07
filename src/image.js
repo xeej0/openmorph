@@ -73,11 +73,12 @@ export function initImage() {
   const label = () => {
     const n = box.files.length;
     go.textContent = n ? `Process ${plural(n, 'image')}` : 'Add images to start';
-    go.disabled = !n;
+    go.disabled = running || !n;
   };
+  let running = false;
   const step = $('#tab-image .step');
   step.hidden = true;
-  const box = fileBox({ inputId: 'img-files', listEl: $('#img-list'), accept: isImage, onChange: (f) => { step.hidden = !f.length; label(); results.reset(); } });
+  const box = fileBox({ inputId: 'img-files', listEl: $('#img-list'), accept: isImage, onChange: (f) => { step.hidden = !f.length; label(); if (!running) results.reset(); } });
 
   const syncQ = () => {
     $('#img-q-val').textContent = q.value + '%';
@@ -116,45 +117,60 @@ export function initImage() {
   syncQ();
 
   go.addEventListener('click', async () => {
+    if (running) return;
+    running = true;
     results.reset();
-    const quality = +q.value / 100;
-    const mode = resize.value, pct = +$('#img-percent').value || 100;
-    const mw = +$('#img-w').value || Infinity, mh = +$('#img-h').value || Infinity;
-    const target = +$('#img-target').value ? +$('#img-target').value * 1024 : 0;
-    const files = [...box.files];
-    for (const [i, file] of files.entries()) {
-      setBusy(go, `Processing ${i + 1} of ${files.length}…`);
-      await new Promise(requestAnimationFrame); // let the UI paint between files
-      try {
-        let type = fmt.value === 'same' ? file.type : fmt.value;
-        if (!EXT[type]) type = mayHaveAlpha(file) ? 'image/png' : 'image/jpeg'; // GIF/BMP/SVG/HEIC with "keep"
-        if (isHeic(file) && fmt.value === 'same') type = 'image/jpeg';
+    try {
+      const fmtV = fmt.value, quality = +q.value / 100;
+      const mode = resize.value, pct = +$('#img-percent').value || 100;
+      const mw = +$('#img-w').value || Infinity, mh = +$('#img-h').value || Infinity;
+      const target = +$('#img-target').value ? +$('#img-target').value * 1024 : 0;
+      const files = [...box.files];
+      for (const [i, file] of files.entries()) {
+        setBusy(go, `Processing ${i + 1} of ${files.length}…`);
+        await new Promise(requestAnimationFrame); // let the UI paint between files
+        try {
+          // animated GIFs would lose their animation on a canvas: keep them unless a format was chosen
+          if (fmtV === 'same' && (file.type === 'image/gif' || /\.gif$/i.test(file.name)) && mode === 'none' && !target) {
+            results.add({ blob: file, name: file.name, origSize: file.size, thumb: true, meta: 'GIF kept as-is · to shrink an animation use Video & Audio → GIF' });
+            continue;
+          }
+          let type = fmtV === 'same' ? file.type : fmtV;
+          if (!EXT[type]) type = mayHaveAlpha(file) ? 'image/png' : 'image/jpeg'; // GIF/BMP/SVG/HEIC with "keep"
+          if (isHeic(file) && fmtV === 'same') type = 'image/jpeg';
 
-        const img = await loadImage(file);
-        const ow = img.naturalWidth || img.width || 1024, oh = img.naturalHeight || img.height || 1024;
-        let w = ow, h = oh;
-        if (mode === 'percent') { w = Math.round(w * pct / 100); h = Math.round(h * pct / 100); }
-        if (mode === 'dims') { const s = Math.min(1, mw / w, mh / h); w = Math.round(w * s); h = Math.round(h * s); }
-        const c = document.createElement('canvas');
-        c.width = Math.max(1, w); c.height = Math.max(1, h);
-        const ctx = c.getContext('2d');
-        if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); }
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-        let blob = await encode(c, type, quality, target);
-        let note = '';
-        // never hand back a bigger file in the same format when nothing else was asked for
-        const sameFmt = type === file.type, noResize = mode === 'none' || (w === ow && h === oh);
-        if (sameFmt && noResize && blob.size >= file.size) { blob = file; note = 'already optimal, kept original'; }
-        const name = `${baseName(file.name)}.${EXT[type]}`;
-        const dims = blob === file ? `${ow}×${oh}` : await dimsOf(blob, c);
-        results.add({ blob, name, origSize: file.size, thumb: true, meta: [dims, note].filter(Boolean).join(' · ') });
-      } catch (e) {
-        results.error(`${file.name}: ${e.message}`);
+          const img = await loadImage(file);
+          const ow = img.naturalWidth || img.width || 1024, oh = img.naturalHeight || img.height || 1024;
+          let w = ow, h = oh;
+          if (mode === 'percent') { w = Math.round(w * pct / 100); h = Math.round(h * pct / 100); }
+          if (mode === 'dims') { const s = Math.min(1, mw / w, mh / h); w = Math.round(w * s); h = Math.round(h * s); }
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, w); c.height = Math.max(1, h);
+          const ctx = c.getContext('2d');
+          if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); }
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          let blob = await encode(c, type, quality, target);
+          let note = '';
+          // never hand back a bigger file when only compression was asked for
+          // (HEIC is the exception: most apps can't open it, so JPG is the useful result)
+          const noResize = mode === 'none' || (w === ow && h === oh);
+          const keepable = type === file.type || (fmtV === 'same' && !isHeic(file));
+          let name = `${baseName(file.name)}.${EXT[type]}`;
+          if (keepable && noResize && blob.size >= file.size) { blob = file; name = file.name; note = 'already optimal, kept original'; }
+          const dims = blob === file ? `${ow}×${oh}` : await dimsOf(blob, c);
+          results.add({ blob, name, origSize: file.size, thumb: true, meta: [dims, note].filter(Boolean).join(' · ') });
+        } catch (e) {
+          results.error(`${file.name}: ${/Failed to fetch|dynamically imported|Importing a module/i.test(e.message) ? 'could not load the HEIC decoder (check your connection)' : e.message}`);
+        }
       }
+      await results.finish('openmorph-images.zip');
+    } catch (e) {
+      results.error(/Failed to fetch|dynamically imported|Importing a module/i.test(e.message) ? 'Could not load part of the app. Check your connection and reload.' : e.message);
+    } finally {
+      running = false;
+      setBusy(go); label();
     }
-    await results.finish('openmorph-images.zip');
-    setBusy(go); label();
   });
   return { box };
 }

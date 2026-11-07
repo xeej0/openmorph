@@ -176,3 +176,4 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); m
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 60; background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 600; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
 
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition: none !important; } }
+.opts .full { grid-column: 1 / -1; margin: 0; }

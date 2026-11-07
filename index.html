@@ -8,6 +8,14 @@
   <meta name="theme-color" content="#5b5bf7" />
   <meta property="og:title" content="OpenMorph: private file converter" />
   <meta property="og:description" content="Convert, compress and resize images, PDFs, video and audio. Free, open source, no uploads." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://openmorph.vercel.app/" />
+  <meta property="og:image" content="https://openmorph.vercel.app/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="canonical" href="https://openmorph.vercel.app/" />
+  <meta name="color-scheme" content="light dark" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b5bf7'/><path d='M9 13h11l-3-3M23 19H12l3 3' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
@@ -105,10 +113,9 @@
           <label>Max file size (KB)
             <input id="img-target" type="number" min="1" placeholder="no limit" inputmode="numeric" />
           </label>
-          
         </div>
+        <p class="note step-note">Converted images have their metadata (EXIF, camera info, GPS location) removed automatically.</p>
       </div>
-      <p class="note step-note">Converted images have their metadata (EXIF, camera info, GPS location) removed automatically.</p>
       <div class="actions"><button class="go" id="img-go" disabled>Add images to start</button></div>
       <div class="results" id="img-results" aria-live="polite"></div>
     </section>
@@ -138,7 +145,7 @@
     <!-- MEDIA -->
     <section class="panel" id="tab-media" role="tabpanel" aria-labelledby="t-media" hidden>
       <div class="drop" tabindex="0" role="button" data-for="media-files">
-        <input id="media-files" type="file" accept="video/*,audio/*,.mkv,.flv,.avi,.wmv,.m4a,.flac,.opus,.ogg,.ts,.3gp" multiple hidden />
+        <input id="media-files" type="file" accept="video/*,audio/*,image/gif,.mkv,.flv,.avi,.wmv,.m4a,.flac,.opus,.ogg,.ts,.3gp" multiple hidden />
         <div class="drop-icon" aria-hidden="true">⬆</div>
         <strong>Drop video or audio or click to browse</strong>
         <small>MP4, MOV, MKV, WebM, AVI, MP3, WAV, M4A, FLAC, OGG and more</small>
@@ -230,7 +237,7 @@
         <button class="ghost" id="media-cancel" type="button" hidden>Cancel</button>
       </div>
       <div class="progress" id="media-progress" hidden>
-        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span></span></div>
+        <div class="bar" role="progressbar" aria-label="Conversion progress" aria-valuemin="0" aria-valuemax="100"><span></span></div>
         <small class="ptext"></small>
       </div>
       <div class="results" id="media-results" aria-live="polite"></div>

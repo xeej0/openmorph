@@ -1,26 +1,49 @@
 import { $, $$, fileBox, Results, baseName, ext, parseTime, setBusy, plural, isMedia, fmtSize } from './util.js';
 
+// ffmpeg.wasm runs in 32-bit WebAssembly: input + output must fit in ~2 GB of memory.
+const MAX_BYTES = 1.5 * 1024 ** 3;
+const acceptMedia = (f) => isMedia(f) || /\.gif$/i.test(f.name) || f.type === 'image/gif';
+
 const AUDIO = ['mp3', 'm4a', 'wav', 'ogg', 'opus', 'flac'];
 const MIME = { mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', gif: 'image/gif',
   mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac' };
 
 let ffmpeg = null;
+let loading = null;
+let pending = null; // instance being loaded, so Cancel can stop the download too
 let logLines = [];
+let logSeq = 0; // total lines ever logged; logLines only keeps the last 500
+const logSince = (seq) => logLines.slice(Math.max(0, logLines.length - (logSeq - seq)));
 const log = (m) => {
+  logSeq++;
   logLines.push(m);
   if (logLines.length > 500) logLines.shift();
   const pre = $('#media-log'); pre.textContent = logLines.join('\n'); pre.scrollTop = pre.scrollHeight;
 };
 
-async function getFFmpeg() {
-  if (ffmpeg) return ffmpeg;
+function getFFmpeg() {
+  if (ffmpeg) return Promise.resolve(ffmpeg);
+  // share one in-flight load between the warm-up and the Convert click
+  loading ??= loadFFmpeg().finally(() => (loading = null));
+  return loading;
+}
+
+async function loadFFmpeg() {
   const { FFmpeg } = await import('@ffmpeg/ffmpeg');
   const ff = new FFmpeg();
+  pending = ff;
   ff.on('log', ({ message }) => log(message));
-  const base = new URL('/ffmpeg/', location.href).href;
+  const base = new URL(`/ffmpeg/${__FFMPEG_CORE__}/`, location.href).href;
   await ff.load({ coreURL: base + 'ffmpeg-core.js', wasmURL: base + 'ffmpeg-core.wasm' });
+  if (pending !== ff) throw new Error('cancelled');
+  pending = null;
   ffmpeg = ff;
   return ff;
+}
+
+function killEngine() {
+  for (const ff of [ffmpeg, pending]) if (ff) { try { ff.terminate(); } catch {} }
+  ffmpeg = pending = null;
 }
 
 /** Duration in seconds: ask the browser first, fall back to ffmpeg's own probe. */
@@ -36,9 +59,9 @@ async function probeDuration(file, ff, input) {
     el.src = url;
   });
   if (viaBrowser) return viaBrowser;
-  const start = logLines.length;
+  const start = logSeq;
   await ff.exec(['-hide_banner', '-i', input]);
-  const m = logLines.slice(start).join('\n').match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+  const m = logSince(start).join('\n').match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
   return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : null;
 }
 
@@ -48,10 +71,13 @@ function buildArgs(input, output, o) {
   a.push('-i', input);
   if (o.end) a.push('-t', String(o.end - (o.start || 0)));
   const fmt = o.format;
-  const scale = o.height ? `scale=-2:min(${o.height}\\,ih)` : null;
+  // yuv420p needs even width/height, so always round down to even numbers
+  const scale = o.height ? `scale=-2:trunc(min(${o.height}\\,ih)/2)*2` : 'scale=trunc(iw/2)*2:trunc(ih/2)*2';
+  // first video + first audio stream only; skip subtitles/data that can't be re-encoded
+  const maps = ['-map', '0:v:0?', '-map', '0:a:0?', '-sn', '-dn'];
 
   if (AUDIO.includes(fmt)) {
-    a.push('-vn', '-map_metadata', '-1');
+    a.push('-vn', '-sn', '-dn', '-map_metadata', '-1');
     const [codec, lossy] = { mp3: ['libmp3lame', 1], m4a: ['aac', 1], ogg: ['libvorbis', 1], opus: ['libopus', 1], wav: ['pcm_s16le', 0], flac: ['flac', 0] }[fmt];
     a.push('-c:a', codec);
     if (lossy) a.push('-b:a', o.abr);
@@ -59,8 +85,8 @@ function buildArgs(input, output, o) {
     const sz = o.height ? `scale=-2:min(${o.height}\\,ih):flags=lanczos` : 'scale=min(480\\,iw):-2:flags=lanczos';
     a.push('-filter_complex', `fps=${o.fps},${sz},split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0');
   } else {
-    if (scale) a.push('-vf', scale);
-    const audioK = o.vbitrate && o.vbitrate < 600 ? 64 : 128;
+    a.push(...maps, '-vf', scale);
+    const audioK = o.audioK ?? (o.vbitrate && o.vbitrate < 600 ? 64 : 128);
     if (fmt === 'webm') {
       a.push('-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8');
       if (o.vbitrate) a.push('-b:v', `${o.vbitrate}k`, '-maxrate', `${Math.round(o.vbitrate * 1.2)}k`, '-bufsize', `${o.vbitrate * 2}k`);
@@ -92,8 +118,15 @@ export function initMedia() {
     go.textContent = n ? `Convert ${plural(n, 'file')} to ${f.toUpperCase()}` : 'Add files to start';
   };
   step.hidden = true;
-  const box = fileBox({ inputId: 'media-files', listEl: $('#media-list'), accept: isMedia,
-    onChange: (f) => { step.hidden = !f.length; label(); if (!running) { results.reset(); prog.hidden = true; } } });
+  const box = fileBox({ inputId: 'media-files', listEl: $('#media-list'), accept: (f) => {
+      if (!acceptMedia(f)) return false;
+      if (f.size > MAX_BYTES) return `${f.name} is ${fmtSize(f.size)}. In-browser video is limited to about 1.5 GB per file.`;
+      return true;
+    },
+    onChange: (f) => {
+      // start downloading the engine in the background as soon as there is work for it
+      if (f.length && !ffmpeg) getFFmpeg().catch(() => {});
+      step.hidden = !f.length; label(); if (!running) { results.reset(); prog.hidden = true; } } });
 
   const syncOpts = () => {
     const f = fmtSel.value, audio = AUDIO.includes(f), gif = f === 'gif', target = sizeMode.value === 'target';
@@ -137,14 +170,13 @@ export function initMedia() {
   const status = (t, p) => {
     prog.hidden = false; ptext.textContent = t;
     barWrap.classList.toggle('indet', p == null);
-    if (p != null) { bar.style.width = Math.round(p * 100) + '%'; barWrap.setAttribute('aria-valuenow', Math.round(p * 100)); }
+    if (p != null) { bar.style.width = Math.round(p * 100) + '%'; barWrap.setAttribute('aria-valuenow', Math.round(p * 100)); } else barWrap.removeAttribute('aria-valuenow');
   };
 
   cancel.addEventListener('click', () => {
-    if (!running || !ffmpeg) return;
+    if (!running) return;
     cancelled = true;
-    ffmpeg.terminate(); // kills the worker; a fresh one loads on next run
-    ffmpeg = null;
+    killEngine(); // stops a conversion or the engine download; a fresh engine loads next time
   });
 
   go.addEventListener('click', async () => {
@@ -159,7 +191,8 @@ export function initMedia() {
         targetMB: sizeMode.value === 'target' && !AUDIO.includes(fmtSel.value) && fmtSel.value !== 'gif' ? +$('#media-target').value : 0,
       };
       if (o.end != null && o.end <= (o.start || 0)) throw new Error('Trim end must be after trim start');
-      if (sizeMode.value === 'target' && o.targetMB !== 0 && !(o.targetMB > 0)) throw new Error('Enter a max size in MB');
+      const wantsTarget = sizeMode.value === 'target' && !AUDIO.includes(o.format) && o.format !== 'gif';
+      if (wantsTarget && !(o.targetMB > 0)) throw new Error('Enter a max size in MB (for example 10)');
     } catch (e) { results.error(e.message); return; }
 
     running = true; cancelled = false;
@@ -169,9 +202,11 @@ export function initMedia() {
       status('Loading the video engine (first time only, ~30 MB)…', null);
       ff = await getFFmpeg();
     } catch (e) {
-      results.error('Could not load the video engine. Check your connection and try again. (' + e.message + ')');
+      if (cancelled) results.warn('Cancelled.');
+      else results.error('Could not load the video engine. Check your connection and try again. (' + e.message + ')');
       running = false; setBusy(go); cancel.hidden = true; prog.hidden = true; label(); return;
     }
+    if (cancelled) { results.warn('Cancelled.'); running = false; setBusy(go); cancel.hidden = true; prog.hidden = true; label(); return; }
 
     const { fetchFile } = await import('@ffmpeg/util');
     const files = [...box.files];
@@ -193,6 +228,7 @@ export function initMedia() {
             const dur = Math.max(0.5, (o.end ?? full) - (o.start || 0));
             const totalK = (opts.targetMB * 8 * 1024 * (attempt ? 0.85 : 0.93)) / dur;
             const audioK = o.mute ? 0 : totalK - 128 < 600 ? 64 : 128;
+            opts.audioK = audioK || 64;
             opts.vbitrate = Math.max(40, Math.floor(totalK - audioK));
             // pick a sensible resolution for the bitrate unless the user chose one
             if (!o.height) opts.height = opts.vbitrate < 350 ? 360 : opts.vbitrate < 800 ? 480 : opts.vbitrate < 1800 ? 720 : opts.vbitrate < 4000 ? 1080 : 0;
@@ -204,11 +240,13 @@ export function initMedia() {
           };
           ff.on('progress', onProg);
           status(`Converting ${file.name}${tag}…`, 0);
+          const runStart = logSeq;
           const code = await ff.exec(buildArgs(input, output, opts));
           ff.off('progress', onProg);
           if (code !== 0) {
-            const tail = logLines.slice(-6).find((l) => /error|invalid|not|unsupported|no such/i.test(l));
-            const noStream = /does not contain any stream|matches no streams|Output file #0 does not contain|Cannot find a matching stream|Stream map .* matches no/i.test(logLines.join('\n'));
+            const runLog = logSince(runStart);
+            const tail = runLog.slice(-8).find((l) => /error|invalid|not|unsupported|no such/i.test(l));
+            const noStream = /does not contain any stream|matches no streams|Output file #0 does not contain|Cannot find a matching stream|Stream map .* matches no/i.test(runLog.join('\n'));
             throw new Error(noStream ? (AUDIO.includes(o.format) ? 'this file has no audio track' : 'this file has no video track')
               : `conversion failed${tail ? ': ' + tail.trim() : ''}. See "Technical log" below.`);
           }

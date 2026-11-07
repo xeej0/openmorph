@@ -72,12 +72,16 @@ export function fileBox({ inputId, listEl, onChange, sortable = false, accept = 
   listEl.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-a]'); if (!btn) return;
     const a = btn.dataset.a;
-    if (a === 'clear') { files = []; return render(); }
+    if (a === 'clear') { files = []; render(); return drop.focus(); }
     const i = +btn.closest('.file').dataset.i;
+    let to = i;
     if (a === 'rm') files.splice(i, 1);
-    if (a === 'up' && i > 0) [files[i - 1], files[i]] = [files[i], files[i - 1]];
-    if (a === 'down' && i < files.length - 1) [files[i + 1], files[i]] = [files[i], files[i + 1]];
+    if (a === 'up' && i > 0) { [files[i - 1], files[i]] = [files[i], files[i - 1]]; to = i - 1; }
+    if (a === 'down' && i < files.length - 1) { [files[i + 1], files[i]] = [files[i], files[i + 1]]; to = i + 1; }
     render();
+    if (!files.length) return drop.focus();
+    const row = $$('.file', listEl)[Math.min(to, files.length - 1)];
+    (row?.querySelector(`[data-a="${a}"]:not(:disabled)`) || row?.querySelector('[data-a="rm"]'))?.focus();
   });
 
   if (sortable) {
@@ -98,8 +102,11 @@ export function fileBox({ inputId, listEl, onChange, sortable = false, accept = 
 
   const add = (list) => {
     list = [...list];
-    const ok = list.filter(accept);
-    if (ok.length < list.length) toast(`Skipped ${plural(list.length - ok.length, 'file')} this tool can't open`);
+    // accept() returns true to keep a file, false to skip it, or a string explaining why it was skipped
+    const reasons = [];
+    const ok = list.filter((f) => { const r = accept(f); if (typeof r === 'string') reasons.push(r); return r === true; });
+    if (reasons.length) toast(reasons[0], 5000);
+    else if (ok.length < list.length) toast(`Skipped ${plural(list.length - ok.length, 'file')} this tool can't open`);
     if (!ok.length) return;
     files = single ? [ok[0]] : files.concat(ok);
     render();
@@ -136,7 +143,7 @@ export class Results {
     }
     const th = thumb ? `<img class="thumb" src="${url}" alt="" loading="lazy">` : `<span class="thumb">${esc(ext(name))}</span>`;
     row.innerHTML = `${th}<div class="info"><div class="n">${esc(name)}</div><div class="delta">${delta}${meta ? ' · ' + esc(meta) : ''}</div></div>
-      <a class="dl" href="${url}" download="${esc(name)}">⬇ Download</a>
+      <a class="dl" href="${url}" download="${esc(name)}" aria-label="Download ${esc(name)}">⬇ Download</a>
       ${player ? `<div class="player">${player === 'video' ? `<video src="${url}" controls preload="metadata" playsinline></video>` : `<audio src="${url}" controls preload="metadata"></audio>`}</div>` : ''}`;
     this.el.appendChild(row);
   }

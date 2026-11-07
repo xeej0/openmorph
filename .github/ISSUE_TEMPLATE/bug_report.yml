@@ -1,0 +1,23 @@
+name: Bug report
+description: Something didn't convert or didn't work as expected
+labels: [bug]
+body:
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Tool
+      options: [Images, PDF, Video & Audio, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and any error shown. Please don't attach private files; describe them instead (type, size, where it came from).
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: e.g. Chrome 131 on Windows, Safari on iPhone 15

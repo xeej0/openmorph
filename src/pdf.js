@@ -1,12 +1,17 @@
-import { PDFDocument, degrees } from 'pdf-lib';
+// pdf-lib (~400 KB) is only downloaded when a PDF tool actually runs.
+let PDFDocument, degrees;
+async function ensurePdfLib() {
+  if (!PDFDocument) ({ PDFDocument, degrees } = await import('pdf-lib'));
+}
 import { $, $$, fileBox, Results, baseName, parseRanges, setBusy, plural, isImage, isPdf } from './util.js';
 import { loadImage } from './image.js';
 
 let pdfjs;
 async function getPdfjs() {
   if (!pdfjs) {
-    pdfjs = await import('pdfjs-dist');
-    pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+    const [lib, worker] = await Promise.all([import('pdfjs-dist'), import('pdfjs-dist/build/pdf.worker.min.mjs?url')]);
+    lib.GlobalWorkerOptions.workerSrc = worker.default;
+    pdfjs = lib; // only cache once fully set up
   }
   return pdfjs;
 }
@@ -41,7 +46,7 @@ const MODES = {
     btn: (n) => `Compress ${plural(n, 'PDF')}`,
     opts: `<label>Strength<select id="p-level"><option value="light">Light · keeps text selectable</option><option value="medium" selected>Strong · 150 DPI</option><option value="high">Extreme · 96 DPI</option></select></label>
            <label class="jq">Image quality<select id="p-jq"><option value="0.8">High</option><option value="0.65" selected>Medium</option><option value="0.45">Low</option></select></label>
-           <p class="note lvl-note" style="grid-column:1/-1;margin:0">Strong and Extreme turn each page into an image, so text can no longer be selected or searched.</p>`,
+           <p class="note lvl-note full">Strong and Extreme turn each page into an image, so text can no longer be selected or searched.</p>`,
   },
   rotate: {
     title: 'Drop PDFs or click to browse', hint: 'Turn all pages or just some of them.', accept: isPdf, acceptAttr: '.pdf,application/pdf', min: 1,
@@ -50,9 +55,9 @@ const MODES = {
   },
 };
 
-async function imagesToPdf(files, onStep) {
+async function imagesToPdf(files, onStep, opt) {
   const doc = await PDFDocument.create();
-  const size = $('#p-size').value, margin = +$('#p-margin').value || 0, iq = +$('#p-iq').value;
+  const size = opt['p-size'], margin = +opt['p-margin'] || 0, iq = +opt['p-iq'];
   for (const [i, f] of files.entries()) {
     onStep(`Adding image ${i + 1} of ${files.length}…`);
     const img = await loadImage(f);
@@ -90,7 +95,7 @@ async function loadPdf(file) {
 
 async function openPdfjs(file) {
   const lib = await getPdfjs();
-  try { return await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise; }
+  try { return await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise; }
   catch (e) { throw new Error(e?.name === 'PasswordException' ? `"${file.name}" is password-protected` : `"${file.name}" isn't a readable PDF`); }
 }
 
@@ -111,19 +116,20 @@ export function initPdf() {
   const go = $('#pdf-go'), results = new Results($('#pdf-results'));
   const step = $('#tab-pdf .step');
   let mode = 'img2pdf';
+  let running = false;
   const label = () => {
     const n = box.files.length, m = MODES[mode];
-    go.disabled = n < m.min;
+    go.disabled = running || n < m.min;
     go.textContent = n ? m.btn(n) : 'Add files to start';
   };
   const box = fileBox({
     inputId: 'pdf-files', listEl: $('#pdf-list'), sortable: true,
     accept: (f) => MODES[mode].accept(f),
-    onChange: (f) => { step.hidden = !f.length || !MODES[mode].opts; label(); results.reset(); },
+    onChange: (f) => { step.hidden = !f.length || !MODES[mode].opts; label(); if (!running) results.reset(); },
   });
 
   const setMode = (m) => {
-    if (!MODES[m]) return;
+    if (!MODES[m] || running) return false; // never switch tools under a running job
     const prev = MODES[mode];
     mode = m;
     const M = MODES[m];
@@ -139,6 +145,7 @@ export function initPdf() {
       const sync = () => { const light = lvl.value === 'light'; $('.jq').hidden = light; $('.lvl-note').hidden = light; };
       lvl.addEventListener('change', sync); sync();
     }
+    return true;
   };
   $('#pdf-modes').addEventListener('click', (e) => { const b = e.target.closest('button[data-mode]'); if (b) setMode(b.dataset.mode); });
   $('#pdf-modes').addEventListener('keydown', (e) => {
@@ -146,26 +153,33 @@ export function initPdf() {
     if (!keys[e.key]) return;
     e.preventDefault();
     const btns = $$('#pdf-modes button'), i = btns.findIndex((b) => b.dataset.mode === mode);
-    const n = btns[(i + keys[e.key] + btns.length) % btns.length]; setMode(n.dataset.mode); n.focus();
+    const n = btns[(i + keys[e.key] + btns.length) % btns.length]; if (setMode(n.dataset.mode)) n.focus();
   });
   setMode('img2pdf');
 
-  const api = { setMode, box, get mode() { return mode; } };
+  const api = { setMode, box, get mode() { return mode; }, get running() { return running; } };
 
   go.addEventListener('click', async () => {
+    if (running) return;
+    running = true;
     results.reset();
+    $$('#pdf-modes button').forEach((b) => b.setAttribute('aria-disabled', 'true'));
+    // snapshot everything up front so nothing the user touches mid-run can change the job
+    const m = mode;
     const files = [...box.files];
+    const opt = Object.fromEntries($$('#pdf-opts select, #pdf-opts input').map((el) => [el.id, el.value.trim()]));
     const status = (t) => setBusy(go, t);
     status('Working…');
-    const ranges = () => $('#p-ranges')?.value.trim() || '';
+    const ranges = () => opt['p-ranges'] || '';
     try {
-      if (mode === 'img2pdf') {
+      await ensurePdfLib();
+      if (m === 'img2pdf') {
         const total = files.reduce((a, f) => a + f.size, 0);
-        const bytes = await imagesToPdf(files, status);
+        const bytes = await imagesToPdf(files, status, opt);
         results.add({ blob: pdfBlob(bytes), name: `${baseName(files[0].name)}.pdf`, origSize: total, meta: plural(files.length, 'page') });
       }
 
-      if (mode === 'merge') {
+      if (m === 'merge') {
         const out = await PDFDocument.create();
         let pages = 0;
         for (const [i, f] of files.entries()) {
@@ -176,11 +190,11 @@ export function initPdf() {
         results.add({ blob: pdfBlob(await out.save()), name: 'merged.pdf', meta: plural(pages, 'page') });
       }
 
-      if (mode === 'split') {
+      if (m === 'split') {
         for (const f of files) {
           const src = await loadPdf(f);
           const idx = ranges() ? parseRanges(ranges(), src.getPageCount()) : src.getPageIndices();
-          if ($('#p-split').value === 'extract') {
+          if (opt['p-split'] === 'extract') {
             const out = await PDFDocument.create();
             (await out.copyPages(src, idx)).forEach((p) => out.addPage(p));
             results.add({ blob: pdfBlob(await out.save()), name: `${baseName(f.name)}-pages.pdf`, meta: plural(idx.length, 'page') });
@@ -195,8 +209,8 @@ export function initPdf() {
         }
       }
 
-      if (mode === 'pdf2img') {
-        const type = $('#p-fmt').value, scale = +$('#p-dpi').value / 72;
+      if (m === 'pdf2img') {
+        const type = opt['p-fmt'], scale = +opt['p-dpi'] / 72;
         const extn = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[type];
         for (const f of files) {
           const pdf = await openPdfjs(f);
@@ -210,8 +224,8 @@ export function initPdf() {
         }
       }
 
-      if (mode === 'compress') {
-        const level = $('#p-level').value, jq = +$('#p-jq').value;
+      if (m === 'compress') {
+        const level = opt['p-level'], jq = +opt['p-jq'];
         for (const f of files) {
           let bytes;
           if (level === 'light') {
@@ -239,8 +253,8 @@ export function initPdf() {
         }
       }
 
-      if (mode === 'rotate') {
-        const deg = +$('#p-rot').value;
+      if (m === 'rotate') {
+        const deg = +opt['p-rot'];
         for (const f of files) {
           const src = await loadPdf(f);
           const idx = ranges() ? parseRanges(ranges(), src.getPageCount()) : src.getPageIndices();
@@ -248,11 +262,15 @@ export function initPdf() {
           results.add({ blob: pdfBlob(await src.save()), name: `${baseName(f.name)}-rotated.pdf`, meta: `${plural(idx.length, 'page')} rotated` });
         }
       }
+      await results.finish({ split: 'split-pages.zip', pdf2img: 'pdf-pages.zip', compress: 'compressed-pdfs.zip', rotate: 'rotated-pdfs.zip' }[m] || 'openmorph.zip');
     } catch (e) {
-      results.error(e.message || String(e));
+      results.error(/Failed to fetch|dynamically imported|Importing a module/i.test(e.message) ? 'Could not load the PDF engine. Check your connection and reload the page.' : e.message || String(e));
+      await results.finish('openmorph.zip');
+    } finally {
+      running = false;
+      $$('#pdf-modes button').forEach((b) => b.removeAttribute('aria-disabled'));
+      setBusy(go); label();
     }
-    await results.finish({ split: 'split-pages.zip', pdf2img: 'pdf-pages.zip', compress: 'compressed-pdfs.zip', rotate: 'rotated-pdfs.zip' }[mode] || 'openmorph.zip');
-    setBusy(go); label();
   });
 
   return api;

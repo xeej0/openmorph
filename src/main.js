@@ -56,6 +56,7 @@ function route(files) {
   if (avs.length) { media.box.add(avs); show('media'); }
   const skipped = files.length - pdfs.length - imgs.length - avs.length;
   if (skipped) toast(`Skipped ${plural(skipped, 'file')} OpenMorph can't open`);
+  return files.length - skipped;
 }
 
 /* drag anywhere on the page */
@@ -78,6 +79,6 @@ addEventListener('paste', (e) => {
   if (!files.length) return;
   e.preventDefault();
   // clipboard images are usually named "image.png": give them a unique name
-  route(files.map((f, i) => (/^image\.\w+$/.test(f.name) ? new File([f], `pasted-${Date.now()}-${i}.${f.type.split('/')[1] || 'png'}`, { type: f.type }) : f)));
-  toast(`Added ${plural(files.length, 'pasted file')}`);
+  const added = route(files.map((f, i) => (/^image\.\w+$/.test(f.name) ? new File([f], `pasted-${Date.now()}-${i}.${f.type.split('/')[1] || 'png'}`, { type: f.type }) : f)));
+  if (added) toast(`Added ${plural(added, 'pasted file')}`);
 });

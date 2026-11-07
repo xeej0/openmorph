@@ -8,7 +8,8 @@
     "copy-core": "node scripts/copy-core.mjs",
     "dev": "npm run copy-core && vite",
     "build": "npm run copy-core && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node tests/e2e.mjs"
   },
   "dependencies": {
     "@ffmpeg/core": "0.12.10",
@@ -20,6 +21,25 @@
     "pdfjs-dist": "4.10.38"
   },
   "devDependencies": {
+    "playwright": "^1.63.0",
     "vite": "^6.4.1"
-  }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xeej0/openmorph.git"
+  },
+  "homepage": "https://openmorph.vercel.app",
+  "private": true,
+  "keywords": [
+    "file-converter",
+    "image-compressor",
+    "pdf",
+    "ffmpeg",
+    "wasm",
+    "privacy",
+    "foss"
+  ]
 }

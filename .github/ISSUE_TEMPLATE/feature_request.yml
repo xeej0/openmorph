@@ -1,0 +1,10 @@
+name: Feature request
+description: A conversion or option you'd like to see
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to convert or do?
+    validations:
+      required: true
