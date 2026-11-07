@@ -75,9 +75,9 @@ npm run dev
 |---|---|
 | `npm run dev` | Dev server with hot reload |
 | `npm run build` | Static site in `dist/` |
-| `npm test` | Run after a build. 37 end-to-end checks in Chromium under the production security headers. `BASE_URL=https://openmorph.xeej.app/ npm test` checks the live site |
+| `npm test` | Run after a build. 38 end-to-end checks in Chromium under the production security headers. `BASE_URL=https://openmorph.xeej.app/ npm test` checks the live site |
 
-Requires Node 20+. Any static host works. For Vercel, import the repo (settings come from `vercel.json`) or:
+Requires Node 22.13+. Any static host works. For Vercel, import the repo (settings come from `vercel.json`) or:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/xeej0/openmorph)
 

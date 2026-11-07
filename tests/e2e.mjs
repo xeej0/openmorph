@@ -79,6 +79,10 @@ await page.click('[data-mode=compress]');
 await test('compress (strong)', async () => ok(await run('pdf'), 1));
 await page.click('[data-mode=rotate]');
 await test('rotate', async () => ok(await run('pdf'), 1));
+await test('text PDF with a non-embedded font renders to an image', async () => {
+  await page.click('#pdf-list [data-a=clear]'); await page.setInputFiles('#pdf-files', fx('text.pdf'));
+  await page.click('[data-mode=pdf2img]'); ok(await run('pdf'), 1);
+});
 await test('invalid PDF gives a clear error', async () => {
   await page.click('#pdf-list [data-a=clear]'); await page.setInputFiles('#pdf-files', fx('fake.pdf'));
   err(await run('pdf'), /isn't a readable PDF/);

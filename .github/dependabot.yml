@@ -5,10 +5,15 @@ updates:
     schedule:
       interval: weekly
     groups:
-      dependencies:
-        patterns: ["*"]
+      # small, low-risk updates arrive together; major versions come as separate
+      # pull requests so one breaking upgrade can't block the safe ones
+      minor-and-patch:
+        update-types: [minor, patch]
     open-pull-requests-limit: 5
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
