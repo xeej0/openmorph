@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenMorph</title>
+  <meta name="description" content="Free, open-source file converter, compressor and resizer. Images, PDFs, video and audio. Everything runs in your browser; files never leave your device." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b5bf7'/><path d='M9 16a7 7 0 0 1 12-5l2-2v6h-6l2-2a4.5 4.5 0 0 0-7.5 3zM23 16a7 7 0 0 1-12 5l-2 2v-6h6l-2 2a4.5 4.5 0 0 0 7.5-3z' fill='white'/></svg>" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">⇄</span>
+        <div>
+          <h1>OpenMorph</h1>
+          <p class="tag">Convert, compress and resize. 100% in your browser.</p>
+        </div>
+      </div>
+      <a class="gh" href="https://github.com/xeej0/openmorph" target="_blank" rel="noopener">Source on GitHub</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p class="privacy">🔒 No uploads. No accounts. No limits. Your files are processed locally on your device and never sent to a server.</p>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="image" aria-selected="true">🖼️ Images</button>
+      <button role="tab" data-tab="pdf" aria-selected="false">📄 PDF</button>
+      <button role="tab" data-tab="media" aria-selected="false">🎬 Video &amp; Audio</button>
+    </nav>
+
+    <!-- IMAGE -->
+    <section class="panel" id="tab-image">
+      <label class="drop" data-input="img-files">
+        <input id="img-files" type="file" accept="image/*" multiple hidden />
+        <strong>Drop images here</strong> or click to choose<br />
+        <small>JPG, PNG, WebP, GIF, BMP, SVG, AVIF (and HEIC on Safari). Batch supported.</small>
+      </label>
+      <div class="filelist" id="img-list"></div>
+      <div class="opts">
+        <label>Output format
+          <select id="img-format">
+            <option value="same">Keep original</option>
+            <option value="image/jpeg">JPG</option>
+            <option value="image/png">PNG</option>
+            <option value="image/webp">WebP</option>
+            <option value="image/avif">AVIF (if browser supports)</option>
+          </select>
+        </label>
+        <label>Quality <span id="img-q-val">80</span>%
+          <input id="img-quality" type="range" min="5" max="100" value="80" />
+        </label>
+        <label>Resize
+          <select id="img-resize">
+            <option value="none">Original size</option>
+            <option value="percent">By percentage</option>
+            <option value="dims">Max width / height</option>
+          </select>
+        </label>
+        <label class="rz rz-percent" hidden>Scale %
+          <input id="img-percent" type="number" min="1" max="1000" value="50" />
+        </label>
+        <label class="rz rz-dims" hidden>Max width (px)
+          <input id="img-w" type="number" min="1" placeholder="auto" />
+        </label>
+        <label class="rz rz-dims" hidden>Max height (px)
+          <input id="img-h" type="number" min="1" placeholder="auto" />
+        </label>
+        <label>Target max size (KB, optional)
+          <input id="img-target" type="number" min="1" placeholder="e.g. 200" />
+        </label>
+        <label class="check"><input id="img-strip" type="checkbox" checked /> Strip metadata (EXIF/GPS)</label>
+      </div>
+      <button class="go" id="img-go" disabled>Process images</button>
+      <div class="results" id="img-results"></div>
+    </section>
+
+    <!-- PDF -->
+    <section class="panel" id="tab-pdf" hidden>
+      <div class="opts">
+        <label>What do you want to do?
+          <select id="pdf-mode">
+            <option value="img2pdf">Images → PDF</option>
+            <option value="merge">Merge PDFs</option>
+            <option value="split">Split / extract pages</option>
+            <option value="pdf2img">PDF → Images (PNG/JPG)</option>
+            <option value="compress">Compress PDF (make smaller)</option>
+            <option value="rotate">Rotate pages</option>
+          </select>
+        </label>
+      </div>
+      <label class="drop" data-input="pdf-files">
+        <input id="pdf-files" type="file" multiple hidden />
+        <strong id="pdf-drop-title">Drop files here</strong> or click to choose<br />
+        <small id="pdf-drop-hint"></small>
+      </label>
+      <div class="filelist sortable" id="pdf-list"></div>
+      <div class="opts" id="pdf-opts"></div>
+      <button class="go" id="pdf-go" disabled>Run</button>
+      <div class="results" id="pdf-results"></div>
+    </section>
+
+    <!-- MEDIA -->
+    <section class="panel" id="tab-media" hidden>
+      <label class="drop" data-input="media-files">
+        <input id="media-files" type="file" accept="video/*,audio/*,.mkv,.flv,.avi,.wmv,.m4a,.flac,.opus,.ogg" multiple hidden />
+        <strong>Drop video or audio here</strong> or click to choose<br />
+        <small>MP4, MOV, MKV, WebM, AVI, MP3, WAV, M4A, FLAC, OGG and more. Powered by ffmpeg.wasm.</small>
+      </label>
+      <div class="filelist" id="media-list"></div>
+      <div class="opts">
+        <label>Output
+          <select id="media-format">
+            <optgroup label="Video">
+              <option value="mp4">MP4 (H.264)</option>
+              <option value="webm">WebM (VP8)</option>
+              <option value="mov">MOV</option>
+              <option value="mkv">MKV</option>
+              <option value="gif">Animated GIF</option>
+            </optgroup>
+            <optgroup label="Audio only">
+              <option value="mp3">MP3</option>
+              <option value="m4a">M4A (AAC)</option>
+              <option value="wav">WAV</option>
+              <option value="ogg">OGG (Vorbis)</option>
+              <option value="opus">Opus</option>
+              <option value="flac">FLAC</option>
+            </optgroup>
+          </select>
+        </label>
+        <label class="v-only">Compression
+          <select id="media-crf">
+            <option value="23">Balanced (good quality)</option>
+            <option value="28" selected>Smaller file</option>
+            <option value="33">Much smaller</option>
+            <option value="38">Tiny (low quality)</option>
+            <option value="18">High quality (bigger)</option>
+          </select>
+        </label>
+        <label class="v-only">Max height
+          <select id="media-height">
+            <option value="">Keep original</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="360">360p</option>
+            <option value="240">240p</option>
+          </select>
+        </label>
+        <label class="gif-only" hidden>GIF FPS
+          <input id="media-fps" type="number" min="1" max="30" value="12" />
+        </label>
+        <label class="a-only" hidden>Audio bitrate
+          <select id="media-abr">
+            <option value="64k">64 kbps</option>
+            <option value="96k">96 kbps</option>
+            <option value="128k" selected>128 kbps</option>
+            <option value="192k">192 kbps</option>
+            <option value="320k">320 kbps</option>
+          </select>
+        </label>
+        <label>Trim start (sec or mm:ss)
+          <input id="media-start" type="text" placeholder="0" />
+        </label>
+        <label>Trim end (sec or mm:ss)
+          <input id="media-end" type="text" placeholder="end" />
+        </label>
+        <label class="check v-only"><input id="media-mute" type="checkbox" /> Remove audio</label>
+      </div>
+      <p class="note">Heads-up: video runs on a single CPU thread inside the browser, so long or 4K clips can take a while. Keep the tab open.</p>
+      <button class="go" id="media-go" disabled>Convert</button>
+      <div class="progress" id="media-progress" hidden><div class="bar"><span></span></div><small class="ptext"></small></div>
+      <div class="results" id="media-results"></div>
+      <details class="log"><summary>ffmpeg log</summary><pre id="media-log"></pre></details>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    MIT licensed and free forever. Built on <a href="https://ffmpegwasm.netlify.app/" target="_blank" rel="noopener">ffmpeg.wasm</a>,
+    <a href="https://pdf-lib.js.org/" target="_blank" rel="noopener">pdf-lib</a>,
+    <a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">PDF.js</a> and
+    <a href="https://stuk.github.io/jszip/" target="_blank" rel="noopener">JSZip</a>.
+  </footer>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
