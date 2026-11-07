@@ -28,6 +28,9 @@ let logLines = [];
 let logSeq = 0; // total lines ever logged; logLines only keeps the last 500
 const logSince = (seq) => logLines.slice(Math.max(0, logLines.length - (logSeq - seq)));
 const log = (m) => {
+  // ffmpeg.wasm prints "Aborted()" when every run exits normally; it is noise, not an error
+  // (real engine crashes reject the call and are logged separately)
+  if (m.trim() === 'Aborted()') return;
   logSeq++;
   logLines.push(m);
   if (logLines.length > 500) logLines.shift();
