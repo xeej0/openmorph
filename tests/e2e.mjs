@@ -144,11 +144,43 @@ await test('PDF tool cannot be switched mid-run', async () => {
   ok(r, 1);
 });
 
+await test('engine download failure shows a real message, then recovers', async () => {
+  const p3 = await browser.newPage();
+  let block = true;
+  await p3.route('**/ffmpeg-core.wasm', (r) => (block ? r.abort('failed') : r.continue()));
+  await p3.goto(BASE + '#media');
+  await p3.setInputFiles('#media-files', fx('tone.mp3'));
+  await p3.selectOption('#media-format', 'wav');
+  await p3.click('#media-go');
+  await p3.waitForFunction(() => !document.querySelector('#media-go').classList.contains('busy') && document.querySelector('#media-results').children.length, null, { timeout: 60_000 });
+  const msg = await p3.textContent('#media-results');
+  assert.ok(!/undefined/.test(msg), 'error says "undefined": ' + msg);
+  assert.match(msg, /video engine/i);
+  block = false;
+  await p3.click('#media-go');
+  await p3.waitForSelector('#media-results .result', { timeout: 120_000 });
+  await p3.close();
+});
+await test('m4a with spaces in the name → mp3', async () => {
+  const p4 = await browser.newPage();
+  await p4.goto(BASE + '#media');
+  await p4.setInputFiles('#media-files', { name: 'drop 4.m4a', mimeType: 'audio/x-m4a', buffer: (await import('node:fs')).readFileSync(FX + 'tone.m4a') });
+  await p4.click('#media-presets [data-p=mp3]'); await p4.click('#media-go');
+  await p4.waitForSelector('#media-results .result', { timeout: 120_000 });
+  await p4.close();
+});
+
 console.log('Privacy & security');
 await test('no requests to any other origin', async () => assert.deepEqual(foreign, []));
 await test('no page errors or CSP violations', async () => {
   // expected, user-facing errors are rendered in the page, never thrown
   assert.deepEqual(problems, []);
+});
+await test('legacy engine path rewrite matches the installed ffmpeg core', async () => {
+  const fs = await import('node:fs');
+  const v = JSON.parse(fs.readFileSync('node_modules/@ffmpeg/core/package.json', 'utf8')).version;
+  const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
+  assert.ok(vercel.rewrites.some((r) => r.destination === `/ffmpeg/${v}/:file`), 'update the rewrite in vercel.json to ' + v);
 });
 await test('security headers are served', async () => {
   const res = await page.request.get(BASE);

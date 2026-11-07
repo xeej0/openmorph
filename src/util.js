@@ -10,6 +10,17 @@ export function fmtSize(b) {
 export const baseName = (n) => n.replace(/\.[^.]+$/, '') || 'file';
 export const ext = (n) => (n.match(/\.([^.]+)$/)?.[1] || '').toLowerCase();
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/** Readable text for anything thrown or rejected: Error, string, ErrorEvent, DOMException, object. */
+export function errText(e) {
+  if (e == null) return 'unknown error';
+  if (typeof e === 'string') return e.replace(/^Error:\s*/, '') || 'unknown error';
+  if (e.message) return String(e.message);
+  if (e.error?.message) return String(e.error.message);
+  if (e.reason) return errText(e.reason);
+  try { const j = JSON.stringify(e); if (j && j !== '{}') return j; } catch {}
+  return String(e) === '[object Object]' ? 'unknown error' : String(e);
+}
+
 export const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 let toastTimer;

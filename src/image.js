@@ -1,4 +1,4 @@
-import { $, $$, fileBox, Results, baseName, setBusy, plural, isImage } from './util.js';
+import { $, $$, fileBox, Results, baseName, setBusy, plural, isImage, errText } from './util.js';
 
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif' };
 const isHeic = (f) => /image\/hei[cf]/.test(f.type) || /\.hei[cf]$/i.test(f.name);
@@ -161,12 +161,12 @@ export function initImage() {
           const dims = blob === file ? `${ow}×${oh}` : await dimsOf(blob, c);
           results.add({ blob, name, origSize: file.size, thumb: true, meta: [dims, note].filter(Boolean).join(' · ') });
         } catch (e) {
-          results.error(`${file.name}: ${/Failed to fetch|dynamically imported|Importing a module/i.test(e.message) ? 'could not load the HEIC decoder (check your connection)' : e.message}`);
+          results.error(`${file.name}: ${/Failed to fetch|dynamically imported|Importing a module/i.test(errText(e)) ? 'could not load the HEIC decoder (check your connection)' : errText(e)}`);
         }
       }
       await results.finish('openmorph-images.zip');
     } catch (e) {
-      results.error(/Failed to fetch|dynamically imported|Importing a module/i.test(e.message) ? 'Could not load part of the app. Check your connection and reload.' : e.message);
+      results.error(/Failed to fetch|dynamically imported|Importing a module/i.test(errText(e)) ? 'Could not load part of the app. Check your connection and reload.' : errText(e));
     } finally {
       running = false;
       setBusy(go); label();

@@ -3,7 +3,7 @@ let PDFDocument, degrees;
 async function ensurePdfLib() {
   if (!PDFDocument) ({ PDFDocument, degrees } = await import('pdf-lib'));
 }
-import { $, $$, fileBox, Results, baseName, parseRanges, setBusy, plural, isImage, isPdf } from './util.js';
+import { $, $$, fileBox, Results, baseName, parseRanges, setBusy, plural, isImage, isPdf, errText } from './util.js';
 import { loadImage } from './image.js';
 
 let pdfjs;
@@ -264,7 +264,7 @@ export function initPdf() {
       }
       await results.finish({ split: 'split-pages.zip', pdf2img: 'pdf-pages.zip', compress: 'compressed-pdfs.zip', rotate: 'rotated-pdfs.zip' }[m] || 'openmorph.zip');
     } catch (e) {
-      results.error(/Failed to fetch|dynamically imported|Importing a module/i.test(e.message) ? 'Could not load the PDF engine. Check your connection and reload the page.' : e.message || String(e));
+      results.error(/Failed to fetch|dynamically imported|Importing a module/i.test(errText(e)) ? 'Could not load the PDF engine. Check your connection and reload the page.' : errText(e));
       await results.finish('openmorph.zip');
     } finally {
       running = false;

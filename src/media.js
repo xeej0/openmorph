@@ -1,4 +1,4 @@
-import { $, $$, fileBox, Results, baseName, ext, parseTime, setBusy, plural, isMedia, fmtSize } from './util.js';
+import { $, $$, fileBox, Results, baseName, ext, parseTime, setBusy, plural, isMedia, fmtSize, errText } from './util.js';
 
 // ffmpeg.wasm runs in 32-bit WebAssembly: input + output must fit in ~2 GB of memory.
 const MAX_BYTES = 1.5 * 1024 ** 3;
@@ -7,6 +7,19 @@ const acceptMedia = (f) => isMedia(f) || /\.gif$/i.test(f.name) || f.type === 'i
 const AUDIO = ['mp3', 'm4a', 'wav', 'ogg', 'opus', 'flac'];
 const MIME = { mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', gif: 'image/gif',
   mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac' };
+
+/** Errors about the file or settings (shown as-is, never retried). */
+class UserError extends Error {}
+
+/** Turn whatever an engine or browser API rejected with into a readable sentence. */
+function friendly(e) {
+  const t = errText(e);
+  if (/out of memory|OOM|Cannot enlarge memory|Array buffer allocation failed|RangeError/i.test(t)) return 'your browser ran out of memory for this file. Close other tabs, try a shorter trim, or use a desktop browser.';
+  if (/failed to import|Failed to fetch|dynamically imported|Importing a module|NetworkError/i.test(t)) return 'the video engine could not be downloaded. Check your connection and reload the page.';
+  if (/WebAssembly/i.test(t)) return 'your browser blocked WebAssembly, which the video engine needs. Turn off strict/enhanced security mode for this site or try another browser.';
+  if (/terminate/i.test(t)) return 'the video engine was stopped.';
+  return t;
+}
 
 let ffmpeg = null;
 let loading = null;
@@ -193,17 +206,17 @@ export function initMedia() {
       if (o.end != null && o.end <= (o.start || 0)) throw new Error('Trim end must be after trim start');
       const wantsTarget = sizeMode.value === 'target' && !AUDIO.includes(o.format) && o.format !== 'gif';
       if (wantsTarget && !(o.targetMB > 0)) throw new Error('Enter a max size in MB (for example 10)');
-    } catch (e) { results.error(e.message); return; }
+    } catch (e) { results.error(errText(e)); return; }
 
     running = true; cancelled = false;
     setBusy(go, 'Working…'); cancel.hidden = false;
-    let ff;
+    let ff; // replaced if the engine has to be restarted
     try {
       status('Loading the video engine (first time only, ~30 MB)…', null);
       ff = await getFFmpeg();
     } catch (e) {
       if (cancelled) results.warn('Cancelled.');
-      else results.error('Could not load the video engine. Check your connection and try again. (' + e.message + ')');
+      else results.error('Could not start the video engine: ' + friendly(e));
       running = false; setBusy(go); cancel.hidden = true; prog.hidden = true; label(); return;
     }
     if (cancelled) { results.warn('Cancelled.'); running = false; setBusy(go); cancel.hidden = true; prog.hidden = true; label(); return; }
@@ -215,58 +228,75 @@ export function initMedia() {
       const tag = files.length > 1 ? ` (${i + 1} of ${files.length})` : '';
       const input = `in_${i}.${ext(file.name) || 'bin'}`;
       const output = `out_${i}.${o.format}`;
-      let onProg;
-      try {
-        status(`Reading ${file.name}${tag}…`, null);
-        await ff.writeFile(input, await fetchFile(file));
-        const opts = { ...o };
-        let attempt = 0, blob, meta = '';
-        while (true) {
-          if (opts.targetMB) {
-            const full = await probeDuration(file, ff, input);
-            if (!full) throw new Error("couldn't read the video length, so a target size isn't possible. Use quality mode instead.");
-            const dur = Math.max(0.5, (o.end ?? full) - (o.start || 0));
-            const totalK = (opts.targetMB * 8 * 1024 * (attempt ? 0.85 : 0.93)) / dur;
-            const audioK = o.mute ? 0 : totalK - 128 < 600 ? 64 : 128;
-            opts.audioK = audioK || 64;
-            opts.vbitrate = Math.max(40, Math.floor(totalK - audioK));
-            // pick a sensible resolution for the bitrate unless the user chose one
-            if (!o.height) opts.height = opts.vbitrate < 350 ? 360 : opts.vbitrate < 800 ? 480 : opts.vbitrate < 1800 ? 720 : opts.vbitrate < 4000 ? 1080 : 0;
-            meta = `${opts.vbitrate} kbps video${opts.height ? `, ≤${opts.height}p` : ''}`;
+
+      const convertOne = async () => {
+        let onProg;
+        try {
+          status(`Reading ${file.name}${tag}…`, null);
+          await ff.writeFile(input, await fetchFile(file));
+          const opts = { ...o };
+          let attempt = 0, blob, meta = '';
+          while (true) {
+            if (opts.targetMB) {
+              const full = await probeDuration(file, ff, input);
+              if (!full) throw new UserError("couldn't read the video length, so a target size isn't possible. Use quality mode instead.");
+              const dur = Math.max(0.5, (o.end ?? full) - (o.start || 0));
+              const totalK = (opts.targetMB * 8 * 1024 * (attempt ? 0.85 : 0.93)) / dur;
+              const audioK = o.mute ? 0 : totalK - 128 < 600 ? 64 : 128;
+              opts.audioK = audioK || 64;
+              opts.vbitrate = Math.max(40, Math.floor(totalK - audioK));
+              // pick a sensible resolution for the bitrate unless the user chose one
+              if (!o.height) opts.height = opts.vbitrate < 350 ? 360 : opts.vbitrate < 800 ? 480 : opts.vbitrate < 1800 ? 720 : opts.vbitrate < 4000 ? 1080 : 0;
+              meta = `${opts.vbitrate} kbps video${opts.height ? `, ≤${opts.height}p` : ''}`;
+            }
+            onProg = ({ progress }) => {
+              const p = Math.min(1, Math.max(0, progress));
+              status(`Converting ${file.name}${tag}… ${Math.round(p * 100)}%${attempt ? ' (second pass to hit size)' : ''}`, p);
+            };
+            ff.on('progress', onProg);
+            status(`Converting ${file.name}${tag}…`, 0);
+            const runStart = logSeq;
+            const code = await ff.exec(buildArgs(input, output, opts));
+            ff.off('progress', onProg); onProg = null;
+            if (code !== 0) {
+              const runLog = logSince(runStart);
+              const tail = runLog.slice(-8).find((l) => /error|invalid|not|unsupported|no such/i.test(l));
+              const noStream = /does not contain any stream|matches no streams|Output file #0 does not contain|Cannot find a matching stream|Stream map .* matches no/i.test(runLog.join('\n'));
+              throw new UserError(noStream ? (AUDIO.includes(o.format) ? 'this file has no audio track' : 'this file has no video track')
+                : /Invalid data found|could not find codec|moov atom not found/i.test(runLog.join('\n')) ? "this file is damaged or isn't a format ffmpeg can read"
+                : `conversion failed${tail ? ': ' + tail.trim() : ''}. See "Technical log" below.`);
+            }
+            const data = await ff.readFile(output);
+            blob = new Blob([data], { type: MIME[o.format] });
+            if (opts.targetMB && blob.size > opts.targetMB * 1024 * 1024 && attempt === 0) { attempt++; continue; }
+            break;
           }
-          onProg = ({ progress }) => {
-            const p = Math.min(1, Math.max(0, progress));
-            status(`Converting ${file.name}${tag}… ${Math.round(p * 100)}%${attempt ? ' (second pass to hit size)' : ''}`, p);
-          };
-          ff.on('progress', onProg);
-          status(`Converting ${file.name}${tag}…`, 0);
-          const runStart = logSeq;
-          const code = await ff.exec(buildArgs(input, output, opts));
-          ff.off('progress', onProg);
-          if (code !== 0) {
-            const runLog = logSince(runStart);
-            const tail = runLog.slice(-8).find((l) => /error|invalid|not|unsupported|no such/i.test(l));
-            const noStream = /does not contain any stream|matches no streams|Output file #0 does not contain|Cannot find a matching stream|Stream map .* matches no/i.test(runLog.join('\n'));
-            throw new Error(noStream ? (AUDIO.includes(o.format) ? 'this file has no audio track' : 'this file has no video track')
-              : `conversion failed${tail ? ': ' + tail.trim() : ''}. See "Technical log" below.`);
-          }
-          const data = await ff.readFile(output);
-          blob = new Blob([data], { type: MIME[o.format] });
-          if (opts.targetMB && blob.size > opts.targetMB * 1024 * 1024 && attempt === 0) { attempt++; continue; }
-          break;
+          if (opts.targetMB && blob.size > opts.targetMB * 1024 * 1024) results.warn(`${file.name}: came out at ${fmtSize(blob.size)}, a bit over the target. Try trimming or a lower max height.`);
+          if (blob.size > file.size && !AUDIO.includes(o.format) && o.format !== 'gif' && ext(file.name) === o.format)
+            results.warn(`${file.name}: the result is bigger than the original, which means the source was already well compressed. Try a lower quality or max height, or keep the original.`);
+          results.add({
+            blob, name: `${baseName(file.name)}.${o.format}`, origSize: file.size, meta,
+            thumb: o.format === 'gif', player: o.format === 'gif' ? null : AUDIO.includes(o.format) ? 'audio' : (o.format === 'mp4' || o.format === 'webm' ? 'video' : null),
+          });
+        } finally {
+          if (onProg) { try { ff.off('progress', onProg); } catch {} }
+          if (!cancelled && ff) for (const f of [input, output]) { try { await ff.deleteFile(f); } catch {} }
         }
-        if (opts.targetMB && blob.size > opts.targetMB * 1024 * 1024) results.warn(`${file.name}: came out at ${fmtSize(blob.size)}, a bit over the target. Try trimming or a lower max height.`);
-        if (blob.size > file.size && !AUDIO.includes(o.format) && o.format !== 'gif' && ext(file.name) === o.format)
-          results.warn(`${file.name}: the result is bigger than the original, which means the source was already well compressed. Try a lower quality or max height, or keep the original.`);
-        results.add({
-          blob, name: `${baseName(file.name)}.${o.format}`, origSize: file.size, meta,
-          thumb: o.format === 'gif', player: o.format === 'gif' ? null : AUDIO.includes(o.format) ? 'audio' : (o.format === 'mp4' || o.format === 'webm' ? 'video' : null),
-        });
-      } catch (e) {
-        if (onProg && ff) ff.off('progress', onProg);
-        if (!cancelled) results.error(`${file.name}: ${e.message}`);
-      } finally {
-        if (!cancelled) for (const f of [input, output]) { try { await ff.deleteFile(f); } catch {} }
+      };
+
+      // A problem inside the engine itself (crash, out of memory, stale worker) gets one
+      // automatic retry on a fresh engine. Problems with the file itself are reported directly.
+      for (let tries = 0; ; tries++) {
+        try { await convertOne(); break; }
+        catch (e) {
+          if (cancelled) break;
+          if (e instanceof UserError || tries >= 1) { results.error(`${file.name}: ${friendly(e)}`); break; }
+          log(`[OpenMorph] engine error: ${errText(e)}. Restarting the engine and retrying…`);
+          status('The video engine hit a problem. Restarting it and trying again…', null);
+          killEngine();
+          try { ff = await getFFmpeg(); }
+          catch (e2) { results.error(`${file.name}: ${friendly(e2)}`); break; }
+        }
       }
     }
     if (cancelled) { results.warn('Cancelled.'); prog.hidden = true; }
