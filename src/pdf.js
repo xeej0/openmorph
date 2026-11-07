@@ -105,7 +105,7 @@ async function renderPage(page, scale, type, q) {
   c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
-  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  await page.render({ canvas: c, canvasContext: ctx, viewport: vp }).promise;
   const blob = await canvasBlob(c, type, q);
   c.width = c.height = 0; // free memory early
   page.cleanup();
@@ -220,7 +220,7 @@ export function initPdf() {
             const blob = await renderPage(await pdf.getPage(i + 1), scale, type, 0.9);
             results.add({ blob, name: `${baseName(f.name)}-page-${i + 1}.${extn}`, thumb: true });
           }
-          pdf.destroy();
+          await pdf.loadingTask.destroy(); // frees the document and its worker data
         }
       }
 
@@ -243,7 +243,7 @@ export function initPdf() {
               const jpg = await out.embedJpg(new Uint8Array(await (await renderPage(page, scale, 'image/jpeg', jq)).arrayBuffer()));
               out.addPage([base.width, base.height]).drawImage(jpg, { x: 0, y: 0, width: base.width, height: base.height });
             }
-            pdf.destroy();
+            await pdf.loadingTask.destroy(); // frees the document and its worker data
             bytes = await out.save({ useObjectStreams: true });
           }
           const smaller = bytes.length < f.size;
