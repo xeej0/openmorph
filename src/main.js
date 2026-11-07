@@ -5,12 +5,18 @@ import { initMedia } from './media.js';
 
 /* ---------- theme ---------- */
 const root = document.documentElement;
-try { const t = localStorage.getItem('om-theme'); if (t) root.dataset.theme = t; } catch {}
-$('#theme').addEventListener('click', () => {
-  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-  root.dataset.theme = dark ? 'light' : 'dark';
+// the saved choice is applied early by /theme-init.js; here we only keep the button in sync
+const sysDark = matchMedia('(prefers-color-scheme: dark)');
+const isDark = () => (root.dataset.theme ? root.dataset.theme === 'dark' : sysDark.matches);
+const themeBtn = $('#theme');
+const syncThemeBtn = () => themeBtn.setAttribute('aria-pressed', String(isDark()));
+themeBtn.addEventListener('click', () => {
+  root.dataset.theme = isDark() ? 'light' : 'dark';
   try { localStorage.setItem('om-theme', root.dataset.theme); } catch {}
+  syncThemeBtn();
 });
+sysDark.addEventListener?.('change', syncThemeBtn);
+syncThemeBtn();
 
 /* ---------- tabs ---------- */
 const tabs = $$('.tabs button');
