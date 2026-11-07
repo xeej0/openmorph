@@ -43,7 +43,12 @@ const media = initMedia();
 function route(files) {
   files = [...files];
   if (!files.length) return;
-  const pdfs = files.filter(isPdf), imgs = files.filter((f) => isImage(f) && !isPdf(f)), avs = files.filter((f) => isMedia(f) && !isImage(f));
+  const isGif = (f) => f.type === 'image/gif' || /\.gif$/i.test(f.name);
+  // on the Video tab a GIF is something to convert (GIF → MP4), so keep it there
+  const gifToMedia = (f) => current === 'media' && isGif(f);
+  const pdfs = files.filter(isPdf);
+  const imgs = files.filter((f) => isImage(f) && !isPdf(f) && !gifToMedia(f));
+  const avs = files.filter((f) => (isMedia(f) && !isImage(f)) || gifToMedia(f));
   // images go to Images, unless the PDF tool is open on "Images → PDF"
   if (imgs.length) {
     if (current === 'pdf' && pdf.mode === 'img2pdf') pdf.box.add(imgs);
