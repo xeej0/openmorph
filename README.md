@@ -75,7 +75,7 @@ npm run dev
 |---|---|
 | `npm run dev` | Dev server with hot reload |
 | `npm run build` | Static site in `dist/` |
-| `npm test` | Builds must exist first. Runs 34 end-to-end checks in Chromium, under the production security headers |
+| `npm test` | Run after a build. 34 end-to-end checks in Chromium under the production security headers. `BASE_URL=https://openmorph.vercel.app/ npm test` checks the live site |
 
 Requires Node 20+. Any static host works. For Vercel, import the repo (settings come from `vercel.json`) or:
 

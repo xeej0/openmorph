@@ -9,8 +9,9 @@ import { fileURLToPath } from 'node:url';
 const FX = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const fx = (...n) => n.map((x) => FX + x);
 
-const server = await preview({ preview: { port: 4317, strictPort: true }, logLevel: 'silent' });
-const BASE = 'http://localhost:4317/';
+// BASE_URL=https://openmorph.vercel.app/ npm test  runs against a deployed site instead
+const server = process.env.BASE_URL ? null : await preview({ preview: { port: 4317, strictPort: true }, logLevel: 'silent' });
+const BASE = process.env.BASE_URL || 'http://localhost:4317/';
 const browser = await chromium.launch();
 const page = await browser.newPage();
 
@@ -157,6 +158,6 @@ await test('security headers are served', async () => {
 });
 
 await browser.close();
-server.httpServer.close();
+server?.httpServer.close();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
