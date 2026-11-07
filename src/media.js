@@ -1,27 +1,49 @@
-import { $, $$, fileBox, resetResults, addResult, addZip, addError, baseName, ext, parseTime } from './util.js';
+import { $, $$, fileBox, Results, baseName, ext, parseTime, setBusy, plural, isMedia, fmtSize } from './util.js';
 
 const AUDIO = ['mp3', 'm4a', 'wav', 'ogg', 'opus', 'flac'];
+const MIME = { mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', gif: 'image/gif',
+  mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac' };
+
 let ffmpeg = null;
 let logLines = [];
+const log = (m) => {
+  logLines.push(m);
+  if (logLines.length > 500) logLines.shift();
+  const pre = $('#media-log'); pre.textContent = logLines.join('\n'); pre.scrollTop = pre.scrollHeight;
+};
 
-async function getFFmpeg(onStatus) {
+async function getFFmpeg() {
   if (ffmpeg) return ffmpeg;
-  onStatus('Loading video engine (~30 MB, first time only)…');
   const { FFmpeg } = await import('@ffmpeg/ffmpeg');
   const ff = new FFmpeg();
-  ff.on('log', ({ message }) => {
-    logLines.push(message);
-    if (logLines.length > 400) logLines.shift();
-    const pre = $('#media-log'); pre.textContent = logLines.join('\n'); pre.scrollTop = pre.scrollHeight;
-  });
+  ff.on('log', ({ message }) => log(message));
   const base = new URL('/ffmpeg/', location.href).href;
   await ff.load({ coreURL: base + 'ffmpeg-core.js', wasmURL: base + 'ffmpeg-core.wasm' });
   ffmpeg = ff;
   return ff;
 }
 
+/** Duration in seconds: ask the browser first, fall back to ffmpeg's own probe. */
+async function probeDuration(file, ff, input) {
+  const viaBrowser = await new Promise((res) => {
+    const el = document.createElement(file.type.startsWith('audio') ? 'audio' : 'video');
+    const url = URL.createObjectURL(file);
+    const done = (v) => { URL.revokeObjectURL(url); res(v); };
+    el.preload = 'metadata';
+    el.onloadedmetadata = () => done(isFinite(el.duration) && el.duration > 0 ? el.duration : null);
+    el.onerror = () => done(null);
+    setTimeout(() => done(null), 4000);
+    el.src = url;
+  });
+  if (viaBrowser) return viaBrowser;
+  const start = logLines.length;
+  await ff.exec(['-hide_banner', '-i', input]);
+  const m = logLines.slice(start).join('\n').match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+  return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : null;
+}
+
 function buildArgs(input, output, o) {
-  const a = [];
+  const a = ['-hide_banner'];
   if (o.start) a.push('-ss', String(o.start));
   a.push('-i', input);
   if (o.end) a.push('-t', String(o.end - (o.start || 0)));
@@ -29,92 +51,190 @@ function buildArgs(input, output, o) {
   const scale = o.height ? `scale=-2:min(${o.height}\\,ih)` : null;
 
   if (AUDIO.includes(fmt)) {
-    a.push('-vn');
-    const codec = { mp3: ['libmp3lame', 1], m4a: ['aac', 1], ogg: ['libvorbis', 1], opus: ['libopus', 1], wav: ['pcm_s16le', 0], flac: ['flac', 0] }[fmt];
-    a.push('-c:a', codec[0]);
-    if (codec[1]) a.push('-b:a', o.abr);
+    a.push('-vn', '-map_metadata', '-1');
+    const [codec, lossy] = { mp3: ['libmp3lame', 1], m4a: ['aac', 1], ogg: ['libvorbis', 1], opus: ['libopus', 1], wav: ['pcm_s16le', 0], flac: ['flac', 0] }[fmt];
+    a.push('-c:a', codec);
+    if (lossy) a.push('-b:a', o.abr);
   } else if (fmt === 'gif') {
     const sz = o.height ? `scale=-2:min(${o.height}\\,ih):flags=lanczos` : 'scale=min(480\\,iw):-2:flags=lanczos';
     a.push('-filter_complex', `fps=${o.fps},${sz},split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=4`, '-loop', '0');
-  } else if (fmt === 'webm') {
-    if (scale) a.push('-vf', scale);
-    a.push('-c:v', 'libvpx', '-crf', String(Math.min(63, o.crf + 6)), '-b:v', '4M', '-deadline', 'realtime', '-cpu-used', '8');
-    a.push(...(o.mute ? ['-an'] : ['-c:a', 'libvorbis', '-b:a', '128k']));
   } else {
     if (scale) a.push('-vf', scale);
-    a.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(o.crf), '-pix_fmt', 'yuv420p');
-    a.push(...(o.mute ? ['-an'] : ['-c:a', 'aac', '-b:a', '128k']));
-    if (fmt === 'mp4' || fmt === 'mov') a.push('-movflags', '+faststart');
+    const audioK = o.vbitrate && o.vbitrate < 600 ? 64 : 128;
+    if (fmt === 'webm') {
+      a.push('-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8');
+      if (o.vbitrate) a.push('-b:v', `${o.vbitrate}k`, '-maxrate', `${Math.round(o.vbitrate * 1.2)}k`, '-bufsize', `${o.vbitrate * 2}k`);
+      else a.push('-crf', String(Math.min(63, o.crf + 6)), '-b:v', '4M');
+      a.push(...(o.mute ? ['-an'] : ['-c:a', 'libvorbis', '-b:a', `${audioK}k`]));
+    } else {
+      a.push('-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p');
+      if (o.vbitrate) a.push('-b:v', `${o.vbitrate}k`, '-maxrate', `${Math.round(o.vbitrate * 1.3)}k`, '-bufsize', `${o.vbitrate * 2}k`);
+      else a.push('-crf', String(o.crf));
+      a.push(...(o.mute ? ['-an'] : ['-c:a', 'aac', '-b:a', `${audioK}k`]));
+      if (fmt === 'mp4' || fmt === 'mov') a.push('-movflags', '+faststart');
+    }
   }
   a.push('-y', output);
   return a;
 }
 
-const MIME = { mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', gif: 'image/gif',
-  mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac' };
-
 export function initMedia() {
-  const go = $('#media-go'), results = $('#media-results');
-  const prog = $('#media-progress'), bar = prog.querySelector('span'), ptext = prog.querySelector('.ptext');
-  const box = fileBox({ inputId: 'media-files', listEl: $('#media-list'), onChange: (f) => (go.disabled = !f.length) });
-  const fmtSel = $('#media-format');
-  const syncOpts = () => {
-    const f = fmtSel.value, audio = AUDIO.includes(f);
-    $$('.v-only').forEach((el) => (el.hidden = audio));
-    $$('.a-only').forEach((el) => (el.hidden = !audio));
-    $$('.gif-only').forEach((el) => (el.hidden = f !== 'gif'));
-    if (f === 'gif') $('#media-crf').closest('label').hidden = true, $('#media-mute').closest('label').hidden = true;
-  };
-  fmtSel.addEventListener('change', syncOpts); syncOpts();
+  const go = $('#media-go'), cancel = $('#media-cancel'), results = new Results($('#media-results'));
+  const prog = $('#media-progress'), barWrap = prog.querySelector('.bar'), bar = barWrap.querySelector('span'), ptext = prog.querySelector('.ptext');
+  const step = $('#tab-media .step');
+  const fmtSel = $('#media-format'), sizeMode = $('#media-sizemode');
+  let running = false, cancelled = false;
 
-  const status = (t, p) => { prog.hidden = false; ptext.textContent = t; if (p != null) bar.style.width = Math.round(p * 100) + '%'; };
+  const label = () => {
+    const n = box.files.length;
+    go.disabled = !n || running;
+    const f = fmtSel.value;
+    go.textContent = n ? `Convert ${plural(n, 'file')} to ${f.toUpperCase()}` : 'Add files to start';
+  };
+  step.hidden = true;
+  const box = fileBox({ inputId: 'media-files', listEl: $('#media-list'), accept: isMedia,
+    onChange: (f) => { step.hidden = !f.length; label(); if (!running) { results.reset(); prog.hidden = true; } } });
+
+  const syncOpts = () => {
+    const f = fmtSel.value, audio = AUDIO.includes(f), gif = f === 'gif', target = sizeMode.value === 'target';
+    $$('#tab-media .v-only').forEach((el) => (el.hidden = audio || gif));
+    $$('#tab-media .g-show').forEach((el) => (el.hidden = audio));
+    $$('#tab-media .a-only').forEach((el) => (el.hidden = !audio || f === 'wav' || f === 'flac'));
+    $$('#tab-media .gif-only').forEach((el) => (el.hidden = !gif));
+    if (!audio && !gif) {
+      $$('#tab-media .q-only').forEach((el) => (el.hidden = target));
+      $$('#tab-media .t-only').forEach((el) => (el.hidden = !target));
+    }
+    label();
+  };
+  fmtSel.addEventListener('change', syncOpts);
+  sizeMode.addEventListener('change', syncOpts);
+  syncOpts();
+
+  const presets = {
+    shrink: { format: 'mp4', size: 'quality', crf: '28', height: '720' },
+    discord: { format: 'mp4', size: 'target', target: 9.5, height: '' },
+    '25mb': { format: 'mp4', size: 'target', target: 24, height: '' },
+    mp4: { format: 'mp4', size: 'quality', crf: '23', height: '' },
+    gif: { format: 'gif', fps: 12, height: '' },
+    mp3: { format: 'mp3', abr: '192k' },
+  };
+  $('#media-presets').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-p]'); if (!b) return;
+    const p = presets[b.dataset.p];
+    fmtSel.value = p.format;
+    if (p.size) sizeMode.value = p.size;
+    if (p.crf) $('#media-crf').value = p.crf;
+    if (p.target) $('#media-target').value = p.target;
+    if (p.height !== undefined) $('#media-height').value = p.height;
+    if (p.fps) $('#media-fps').value = p.fps;
+    if (p.abr) $('#media-abr').value = p.abr;
+    $$('#media-presets button').forEach((x) => x.classList.toggle('on', x === b));
+    syncOpts();
+  });
+  $('#tab-media .opts').addEventListener('input', () => $$('#media-presets button').forEach((x) => x.classList.remove('on')));
+
+  const status = (t, p) => {
+    prog.hidden = false; ptext.textContent = t;
+    barWrap.classList.toggle('indet', p == null);
+    if (p != null) { bar.style.width = Math.round(p * 100) + '%'; barWrap.setAttribute('aria-valuenow', Math.round(p * 100)); }
+  };
+
+  cancel.addEventListener('click', () => {
+    if (!running || !ffmpeg) return;
+    cancelled = true;
+    ffmpeg.terminate(); // kills the worker; a fresh one loads on next run
+    ffmpeg = null;
+  });
 
   go.addEventListener('click', async () => {
-    resetResults(results);
-    go.disabled = true;
-    logLines = [];
-    const done = [];
+    results.reset();
+    logLines = []; $('#media-log').textContent = '';
     let o;
     try {
       o = {
         format: fmtSel.value, crf: +$('#media-crf').value, height: +$('#media-height').value || 0,
         fps: Math.min(30, Math.max(1, +$('#media-fps').value || 12)), abr: $('#media-abr').value,
         start: parseTime($('#media-start').value), end: parseTime($('#media-end').value), mute: $('#media-mute').checked,
+        targetMB: sizeMode.value === 'target' && !AUDIO.includes(fmtSel.value) && fmtSel.value !== 'gif' ? +$('#media-target').value : 0,
       };
       if (o.end != null && o.end <= (o.start || 0)) throw new Error('Trim end must be after trim start');
-    } catch (e) { addError(results, e.message); go.disabled = false; return; }
+      if (sizeMode.value === 'target' && o.targetMB !== 0 && !(o.targetMB > 0)) throw new Error('Enter a max size in MB');
+    } catch (e) { results.error(e.message); return; }
 
+    running = true; cancelled = false;
+    setBusy(go, 'Working…'); cancel.hidden = false;
     let ff;
-    try { ff = await getFFmpeg((t) => status(t, 0)); }
-    catch (e) { addError(results, 'Could not load the video engine: ' + e.message); go.disabled = false; prog.hidden = true; return; }
+    try {
+      status('Loading the video engine (first time only, ~30 MB)…', null);
+      ff = await getFFmpeg();
+    } catch (e) {
+      results.error('Could not load the video engine. Check your connection and try again. (' + e.message + ')');
+      running = false; setBusy(go); cancel.hidden = true; prog.hidden = true; label(); return;
+    }
 
     const { fetchFile } = await import('@ffmpeg/util');
-    for (const [i, file] of box.files.entries()) {
-      const tag = box.files.length > 1 ? ` (${i + 1}/${box.files.length})` : '';
+    const files = [...box.files];
+    for (const [i, file] of files.entries()) {
+      if (cancelled) break;
+      const tag = files.length > 1 ? ` (${i + 1} of ${files.length})` : '';
       const input = `in_${i}.${ext(file.name) || 'bin'}`;
       const output = `out_${i}.${o.format}`;
-      const onProg = ({ progress }) => status(`Converting ${file.name}${tag}… ${Math.round(Math.min(1, Math.max(0, progress)) * 100)}%`, Math.min(1, Math.max(0, progress)));
+      let onProg;
       try {
-        status(`Reading ${file.name}${tag}…`, 0);
+        status(`Reading ${file.name}${tag}…`, null);
         await ff.writeFile(input, await fetchFile(file));
-        ff.on('progress', onProg);
-        const code = await ff.exec(buildArgs(input, output, o));
-        ff.off('progress', onProg);
-        if (code !== 0) throw new Error('ffmpeg failed. Open "ffmpeg log" below for details. ' + (logLines.slice(-3).join(' | ')));
-        const data = await ff.readFile(output);
-        const blob = new Blob([data.buffer], { type: MIME[o.format] });
-        const item = { blob, name: `${baseName(file.name)}.${o.format}` };
-        done.push(item);
-        addResult(results, { ...item, origSize: file.size, thumb: o.format === 'gif' });
+        const opts = { ...o };
+        let attempt = 0, blob, meta = '';
+        while (true) {
+          if (opts.targetMB) {
+            const full = await probeDuration(file, ff, input);
+            if (!full) throw new Error("couldn't read the video length, so a target size isn't possible. Use quality mode instead.");
+            const dur = Math.max(0.5, (o.end ?? full) - (o.start || 0));
+            const totalK = (opts.targetMB * 8 * 1024 * (attempt ? 0.85 : 0.93)) / dur;
+            const audioK = o.mute ? 0 : totalK - 128 < 600 ? 64 : 128;
+            opts.vbitrate = Math.max(40, Math.floor(totalK - audioK));
+            // pick a sensible resolution for the bitrate unless the user chose one
+            if (!o.height) opts.height = opts.vbitrate < 350 ? 360 : opts.vbitrate < 800 ? 480 : opts.vbitrate < 1800 ? 720 : opts.vbitrate < 4000 ? 1080 : 0;
+            meta = `${opts.vbitrate} kbps video${opts.height ? `, ≤${opts.height}p` : ''}`;
+          }
+          onProg = ({ progress }) => {
+            const p = Math.min(1, Math.max(0, progress));
+            status(`Converting ${file.name}${tag}… ${Math.round(p * 100)}%${attempt ? ' (second pass to hit size)' : ''}`, p);
+          };
+          ff.on('progress', onProg);
+          status(`Converting ${file.name}${tag}…`, 0);
+          const code = await ff.exec(buildArgs(input, output, opts));
+          ff.off('progress', onProg);
+          if (code !== 0) {
+            const tail = logLines.slice(-6).find((l) => /error|invalid|not|unsupported|no such/i.test(l));
+            const noStream = /does not contain any stream|matches no streams|Output file #0 does not contain|Cannot find a matching stream|Stream map .* matches no/i.test(logLines.join('\n'));
+            throw new Error(noStream ? (AUDIO.includes(o.format) ? 'this file has no audio track' : 'this file has no video track')
+              : `conversion failed${tail ? ': ' + tail.trim() : ''}. See "Technical log" below.`);
+          }
+          const data = await ff.readFile(output);
+          blob = new Blob([data], { type: MIME[o.format] });
+          if (opts.targetMB && blob.size > opts.targetMB * 1024 * 1024 && attempt === 0) { attempt++; continue; }
+          break;
+        }
+        if (opts.targetMB && blob.size > opts.targetMB * 1024 * 1024) results.warn(`${file.name}: came out at ${fmtSize(blob.size)}, a bit over the target. Try trimming or a lower max height.`);
+        if (blob.size > file.size && !AUDIO.includes(o.format) && o.format !== 'gif' && ext(file.name) === o.format)
+          results.warn(`${file.name}: the result is bigger than the original, which means the source was already well compressed. Try a lower quality or max height, or keep the original.`);
+        results.add({
+          blob, name: `${baseName(file.name)}.${o.format}`, origSize: file.size, meta,
+          thumb: o.format === 'gif', player: o.format === 'gif' ? null : AUDIO.includes(o.format) ? 'audio' : (o.format === 'mp4' || o.format === 'webm' ? 'video' : null),
+        });
       } catch (e) {
-        ff.off('progress', onProg);
-        addError(results, `${file.name}: ${e.message}`);
+        if (onProg && ff) ff.off('progress', onProg);
+        if (!cancelled) results.error(`${file.name}: ${e.message}`);
       } finally {
-        for (const f of [input, output]) { try { await ff.deleteFile(f); } catch {} }
+        if (!cancelled) for (const f of [input, output]) { try { await ff.deleteFile(f); } catch {} }
       }
     }
-    status(done.length ? 'Done ✓' : 'Finished with errors', 1);
-    await addZip(results, done, 'openmorph-media.zip');
-    go.disabled = false;
+    if (cancelled) { results.warn('Cancelled.'); prog.hidden = true; }
+    else status(results.items.length ? 'Done ✓' : 'Finished with errors', 1);
+    await results.finish('openmorph-media.zip');
+    running = false; setBusy(go); cancel.hidden = true; label();
   });
+  return { box };
 }

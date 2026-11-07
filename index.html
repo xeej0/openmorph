@@ -4,185 +4,251 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpenMorph</title>
-  <meta name="description" content="Free, open-source file converter, compressor and resizer. Images, PDFs, video and audio. Everything runs in your browser; files never leave your device." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b5bf7'/><path d='M9 16a7 7 0 0 1 12-5l2-2v6h-6l2-2a4.5 4.5 0 0 0-7.5 3zM23 16a7 7 0 0 1-12 5l-2 2v-6h6l-2 2a4.5 4.5 0 0 0 7.5-3z' fill='white'/></svg>" />
+  <meta name="description" content="Free, open-source file converter, compressor and resizer for images, PDFs, video and audio. Runs in your browser; files never leave your device." />
+  <meta name="theme-color" content="#5b5bf7" />
+  <meta property="og:title" content="OpenMorph: private file converter" />
+  <meta property="og:description" content="Convert, compress and resize images, PDFs, video and audio. Free, open source, no uploads." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b5bf7'/><path d='M9 13h11l-3-3M23 19H12l3 3' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <header class="top">
     <div class="wrap top-inner">
-      <div class="brand">
-        <span class="logo" aria-hidden="true">⇄</span>
-        <div>
-          <h1>OpenMorph</h1>
-          <p class="tag">Convert, compress and resize. 100% in your browser.</p>
-        </div>
+      <a class="brand" href="/">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor"/><path d="M9 13h11l-3-3M23 19H12l3 3" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>OpenMorph</span>
+      </a>
+      <div class="top-actions">
+        <button class="icon-btn" id="theme" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/></svg>
+        </button>
+        <a class="gh" href="https://github.com/xeej0/openmorph" target="_blank" rel="noopener">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.5 15.6c.4 0 .5-.2.5-.4v-1.5c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.3 1.9.9 2.3.7.1-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-4 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.5 7.5 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9.1 2.1.5.6.8 1.3.8 2.1 0 3.1-1.9 3.7-3.6 3.9.3.3.5.8.5 1.5v2.2c0 .2.1.5.6.4A8 8 0 0 0 8 0z"/></svg>
+          <span>GitHub</span>
+        </a>
       </div>
-      <a class="gh" href="https://github.com/xeej0/openmorph" target="_blank" rel="noopener">Source on GitHub</a>
     </div>
   </header>
 
   <main class="wrap">
-    <p class="privacy">🔒 No uploads. No accounts. No limits. Your files are processed locally on your device and never sent to a server.</p>
+    <section class="hero">
+      <h1>Convert, compress &amp; resize. <span class="grad">Privately.</span></h1>
+      <p>Images, PDFs, video and audio, processed right here in your browser. Nothing is uploaded.</p>
+      <ul class="badges">
+        <li>🔒 Files stay on your device</li>
+        <li>∞ No limits or watermarks</li>
+        <li>❤ Free &amp; open source</li>
+      </ul>
+    </section>
 
-    <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="image" aria-selected="true">🖼️ Images</button>
-      <button role="tab" data-tab="pdf" aria-selected="false">📄 PDF</button>
-      <button role="tab" data-tab="media" aria-selected="false">🎬 Video &amp; Audio</button>
+    <nav class="tabs" role="tablist" aria-label="Tools">
+      <button role="tab" id="t-image" data-tab="image" aria-controls="tab-image" aria-selected="true">
+        <span class="ti">🖼️</span><span class="tl">Images</span><small>JPG · PNG · WebP · HEIC</small>
+      </button>
+      <button role="tab" id="t-pdf" data-tab="pdf" aria-controls="tab-pdf" aria-selected="false" tabindex="-1">
+        <span class="ti">📄</span><span class="tl">PDF</span><small>Merge · Split · Compress</small>
+      </button>
+      <button role="tab" id="t-media" data-tab="media" aria-controls="tab-media" aria-selected="false" tabindex="-1">
+        <span class="ti">🎬</span><span class="tl">Video &amp; Audio</span><small>MP4 · GIF · MP3 · Shrink</small>
+      </button>
     </nav>
 
     <!-- IMAGE -->
-    <section class="panel" id="tab-image">
-      <label class="drop" data-input="img-files">
-        <input id="img-files" type="file" accept="image/*" multiple hidden />
-        <strong>Drop images here</strong> or click to choose<br />
-        <small>JPG, PNG, WebP, GIF, BMP, SVG, AVIF (and HEIC on Safari). Batch supported.</small>
-      </label>
-      <div class="filelist" id="img-list"></div>
-      <div class="opts">
-        <label>Output format
-          <select id="img-format">
-            <option value="same">Keep original</option>
-            <option value="image/jpeg">JPG</option>
-            <option value="image/png">PNG</option>
-            <option value="image/webp">WebP</option>
-            <option value="image/avif">AVIF (if browser supports)</option>
-          </select>
-        </label>
-        <label>Quality <span id="img-q-val">80</span>%
-          <input id="img-quality" type="range" min="5" max="100" value="80" />
-        </label>
-        <label>Resize
-          <select id="img-resize">
-            <option value="none">Original size</option>
-            <option value="percent">By percentage</option>
-            <option value="dims">Max width / height</option>
-          </select>
-        </label>
-        <label class="rz rz-percent" hidden>Scale %
-          <input id="img-percent" type="number" min="1" max="1000" value="50" />
-        </label>
-        <label class="rz rz-dims" hidden>Max width (px)
-          <input id="img-w" type="number" min="1" placeholder="auto" />
-        </label>
-        <label class="rz rz-dims" hidden>Max height (px)
-          <input id="img-h" type="number" min="1" placeholder="auto" />
-        </label>
-        <label>Target max size (KB, optional)
-          <input id="img-target" type="number" min="1" placeholder="e.g. 200" />
-        </label>
-        <label class="check"><input id="img-strip" type="checkbox" checked /> Strip metadata (EXIF/GPS)</label>
+    <section class="panel" id="tab-image" role="tabpanel" aria-labelledby="t-image">
+      <div class="drop" tabindex="0" role="button" data-for="img-files">
+        <input id="img-files" type="file" accept="image/*,.heic,.heif" multiple hidden />
+        <div class="drop-icon" aria-hidden="true">⬆</div>
+        <strong>Drop images or click to browse</strong>
+        <small>You can also paste with Ctrl+V · JPG, PNG, WebP, AVIF, GIF, BMP, SVG, HEIC</small>
       </div>
-      <button class="go" id="img-go" disabled>Process images</button>
-      <div class="results" id="img-results"></div>
+      <div class="files" id="img-list"></div>
+
+      <div class="step" data-needs="img-list">
+        <div class="presets" id="img-presets">
+          <span class="plabel">Quick:</span>
+          <button type="button" data-p="compress">Compress</button>
+          <button type="button" data-p="jpg">To JPG</button>
+          <button type="button" data-p="png">To PNG</button>
+          <button type="button" data-p="webp">To WebP</button>
+          <button type="button" data-p="web">Resize for web</button>
+          <button type="button" data-p="1mb">Under 1 MB</button>
+        </div>
+        <div class="opts">
+          <label>Output format
+            <select id="img-format">
+              <option value="same">Keep original</option>
+              <option value="image/jpeg">JPG</option>
+              <option value="image/png">PNG</option>
+              <option value="image/webp">WebP</option>
+              <option value="image/avif">AVIF</option>
+            </select>
+          </label>
+          <label id="img-q-wrap">Quality <output id="img-q-val">80%</output>
+            <input id="img-quality" type="range" min="5" max="100" value="80" />
+          </label>
+          <label>Resize
+            <select id="img-resize">
+              <option value="none">Original size</option>
+              <option value="percent">By percentage</option>
+              <option value="dims">Fit within width / height</option>
+            </select>
+          </label>
+          <label class="rz rz-percent" hidden>Scale (%)
+            <input id="img-percent" type="number" min="1" max="1000" value="50" inputmode="numeric" />
+          </label>
+          <label class="rz rz-dims" hidden>Max width (px)
+            <input id="img-w" type="number" min="1" placeholder="any" inputmode="numeric" />
+          </label>
+          <label class="rz rz-dims" hidden>Max height (px)
+            <input id="img-h" type="number" min="1" placeholder="any" inputmode="numeric" />
+          </label>
+          <label>Max file size (KB)
+            <input id="img-target" type="number" min="1" placeholder="no limit" inputmode="numeric" />
+          </label>
+          
+        </div>
+      </div>
+      <p class="note step-note">Converted images have their metadata (EXIF, camera info, GPS location) removed automatically.</p>
+      <div class="actions"><button class="go" id="img-go" disabled>Add images to start</button></div>
+      <div class="results" id="img-results" aria-live="polite"></div>
     </section>
 
     <!-- PDF -->
-    <section class="panel" id="tab-pdf" hidden>
-      <div class="opts">
-        <label>What do you want to do?
-          <select id="pdf-mode">
-            <option value="img2pdf">Images → PDF</option>
-            <option value="merge">Merge PDFs</option>
-            <option value="split">Split / extract pages</option>
-            <option value="pdf2img">PDF → Images (PNG/JPG)</option>
-            <option value="compress">Compress PDF (make smaller)</option>
-            <option value="rotate">Rotate pages</option>
-          </select>
-        </label>
+    <section class="panel" id="tab-pdf" role="tabpanel" aria-labelledby="t-pdf" hidden>
+      <div class="modes" id="pdf-modes" role="radiogroup" aria-label="PDF tool">
+        <button type="button" role="radio" data-mode="img2pdf"><b>Images → PDF</b><small>Combine photos or scans</small></button>
+        <button type="button" role="radio" data-mode="merge"><b>Merge</b><small>Join several PDFs</small></button>
+        <button type="button" role="radio" data-mode="split"><b>Split / extract</b><small>Pick pages out</small></button>
+        <button type="button" role="radio" data-mode="pdf2img"><b>PDF → Images</b><small>PNG, JPG, WebP</small></button>
+        <button type="button" role="radio" data-mode="compress"><b>Compress</b><small>Make it smaller</small></button>
+        <button type="button" role="radio" data-mode="rotate"><b>Rotate</b><small>Fix sideways pages</small></button>
       </div>
-      <label class="drop" data-input="pdf-files">
+      <div class="drop" tabindex="0" role="button" data-for="pdf-files">
         <input id="pdf-files" type="file" multiple hidden />
-        <strong id="pdf-drop-title">Drop files here</strong> or click to choose<br />
+        <div class="drop-icon" aria-hidden="true">⬆</div>
+        <strong id="pdf-drop-title">Drop files or click to browse</strong>
         <small id="pdf-drop-hint"></small>
-      </label>
-      <div class="filelist sortable" id="pdf-list"></div>
-      <div class="opts" id="pdf-opts"></div>
-      <button class="go" id="pdf-go" disabled>Run</button>
-      <div class="results" id="pdf-results"></div>
+      </div>
+      <div class="files" id="pdf-list"></div>
+      <div class="step" data-needs="pdf-list"><div class="opts" id="pdf-opts"></div></div>
+      <div class="actions"><button class="go" id="pdf-go" disabled>Add files to start</button></div>
+      <div class="results" id="pdf-results" aria-live="polite"></div>
     </section>
 
     <!-- MEDIA -->
-    <section class="panel" id="tab-media" hidden>
-      <label class="drop" data-input="media-files">
-        <input id="media-files" type="file" accept="video/*,audio/*,.mkv,.flv,.avi,.wmv,.m4a,.flac,.opus,.ogg" multiple hidden />
-        <strong>Drop video or audio here</strong> or click to choose<br />
-        <small>MP4, MOV, MKV, WebM, AVI, MP3, WAV, M4A, FLAC, OGG and more. Powered by ffmpeg.wasm.</small>
-      </label>
-      <div class="filelist" id="media-list"></div>
-      <div class="opts">
-        <label>Output
-          <select id="media-format">
-            <optgroup label="Video">
-              <option value="mp4">MP4 (H.264)</option>
-              <option value="webm">WebM (VP8)</option>
-              <option value="mov">MOV</option>
-              <option value="mkv">MKV</option>
-              <option value="gif">Animated GIF</option>
-            </optgroup>
-            <optgroup label="Audio only">
-              <option value="mp3">MP3</option>
-              <option value="m4a">M4A (AAC)</option>
-              <option value="wav">WAV</option>
-              <option value="ogg">OGG (Vorbis)</option>
-              <option value="opus">Opus</option>
-              <option value="flac">FLAC</option>
-            </optgroup>
-          </select>
-        </label>
-        <label class="v-only">Compression
-          <select id="media-crf">
-            <option value="23">Balanced (good quality)</option>
-            <option value="28" selected>Smaller file</option>
-            <option value="33">Much smaller</option>
-            <option value="38">Tiny (low quality)</option>
-            <option value="18">High quality (bigger)</option>
-          </select>
-        </label>
-        <label class="v-only">Max height
-          <select id="media-height">
-            <option value="">Keep original</option>
-            <option value="1080">1080p</option>
-            <option value="720">720p</option>
-            <option value="480">480p</option>
-            <option value="360">360p</option>
-            <option value="240">240p</option>
-          </select>
-        </label>
-        <label class="gif-only" hidden>GIF FPS
-          <input id="media-fps" type="number" min="1" max="30" value="12" />
-        </label>
-        <label class="a-only" hidden>Audio bitrate
-          <select id="media-abr">
-            <option value="64k">64 kbps</option>
-            <option value="96k">96 kbps</option>
-            <option value="128k" selected>128 kbps</option>
-            <option value="192k">192 kbps</option>
-            <option value="320k">320 kbps</option>
-          </select>
-        </label>
-        <label>Trim start (sec or mm:ss)
-          <input id="media-start" type="text" placeholder="0" />
-        </label>
-        <label>Trim end (sec or mm:ss)
-          <input id="media-end" type="text" placeholder="end" />
-        </label>
-        <label class="check v-only"><input id="media-mute" type="checkbox" /> Remove audio</label>
+    <section class="panel" id="tab-media" role="tabpanel" aria-labelledby="t-media" hidden>
+      <div class="drop" tabindex="0" role="button" data-for="media-files">
+        <input id="media-files" type="file" accept="video/*,audio/*,.mkv,.flv,.avi,.wmv,.m4a,.flac,.opus,.ogg,.ts,.3gp" multiple hidden />
+        <div class="drop-icon" aria-hidden="true">⬆</div>
+        <strong>Drop video or audio or click to browse</strong>
+        <small>MP4, MOV, MKV, WebM, AVI, MP3, WAV, M4A, FLAC, OGG and more</small>
       </div>
-      <p class="note">Heads-up: video runs on a single CPU thread inside the browser, so long or 4K clips can take a while. Keep the tab open.</p>
-      <button class="go" id="media-go" disabled>Convert</button>
-      <div class="progress" id="media-progress" hidden><div class="bar"><span></span></div><small class="ptext"></small></div>
-      <div class="results" id="media-results"></div>
-      <details class="log"><summary>ffmpeg log</summary><pre id="media-log"></pre></details>
+      <div class="files" id="media-list"></div>
+
+      <div class="step" data-needs="media-list">
+        <div class="presets" id="media-presets">
+          <span class="plabel">Quick:</span>
+          <button type="button" data-p="shrink">Shrink video</button>
+          <button type="button" data-p="discord">Under 10 MB</button>
+          <button type="button" data-p="25mb">Under 25 MB</button>
+          <button type="button" data-p="mp4">To MP4</button>
+          <button type="button" data-p="gif">To GIF</button>
+          <button type="button" data-p="mp3">Extract MP3</button>
+        </div>
+        <div class="opts">
+          <label>Output
+            <select id="media-format">
+              <optgroup label="Video">
+                <option value="mp4">MP4 (H.264, plays everywhere)</option>
+                <option value="webm">WebM (VP8)</option>
+                <option value="mov">MOV</option>
+                <option value="mkv">MKV</option>
+                <option value="gif">Animated GIF</option>
+              </optgroup>
+              <optgroup label="Audio only">
+                <option value="mp3">MP3</option>
+                <option value="m4a">M4A (AAC)</option>
+                <option value="wav">WAV</option>
+                <option value="ogg">OGG (Vorbis)</option>
+                <option value="opus">Opus</option>
+                <option value="flac">FLAC</option>
+              </optgroup>
+            </select>
+          </label>
+          <label class="v-only">Size target
+            <select id="media-sizemode">
+              <option value="quality">By quality</option>
+              <option value="target">Fit under a file size</option>
+            </select>
+          </label>
+          <label class="v-only q-only">Quality
+            <select id="media-crf">
+              <option value="18">High (bigger file)</option>
+              <option value="23">Balanced</option>
+              <option value="28" selected>Smaller file</option>
+              <option value="33">Much smaller</option>
+              <option value="38">Tiny (low quality)</option>
+            </select>
+          </label>
+          <label class="v-only t-only" hidden>Max size (MB)
+            <input id="media-target" type="number" min="0.5" step="0.5" value="10" inputmode="decimal" />
+          </label>
+          <label class="v-only g-show">Max height
+            <select id="media-height">
+              <option value="">Keep original</option>
+              <option value="1080">1080p</option>
+              <option value="720">720p</option>
+              <option value="480">480p</option>
+              <option value="360">360p</option>
+              <option value="240">240p</option>
+            </select>
+          </label>
+          <label class="gif-only" hidden>GIF frame rate
+            <input id="media-fps" type="number" min="1" max="30" value="12" inputmode="numeric" />
+          </label>
+          <label class="a-only" hidden>Audio quality
+            <select id="media-abr">
+              <option value="64k">64 kbps (voice)</option>
+              <option value="96k">96 kbps</option>
+              <option value="128k" selected>128 kbps (standard)</option>
+              <option value="192k">192 kbps</option>
+              <option value="320k">320 kbps (max)</option>
+            </select>
+          </label>
+          <label>Trim start
+            <input id="media-start" type="text" placeholder="0:00" inputmode="decimal" />
+          </label>
+          <label>Trim end
+            <input id="media-end" type="text" placeholder="end" inputmode="decimal" />
+          </label>
+          <label class="check v-only"><input id="media-mute" type="checkbox" /> Remove audio</label>
+        </div>
+        <p class="note">Video is processed on your device with one CPU thread, so long or 4K clips can take a while. Keep this tab open. The first run downloads the video engine (~30 MB, cached after).</p>
+      </div>
+      <div class="actions">
+        <button class="go" id="media-go" disabled>Add files to start</button>
+        <button class="ghost" id="media-cancel" type="button" hidden>Cancel</button>
+      </div>
+      <div class="progress" id="media-progress" hidden>
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span></span></div>
+        <small class="ptext"></small>
+      </div>
+      <div class="results" id="media-results" aria-live="polite"></div>
+      <details class="log"><summary>Technical log</summary><pre id="media-log"></pre></details>
+    </section>
+
+    <section class="faq">
+      <h2>How is this private?</h2>
+      <p>OpenMorph is a static web page. All conversion happens with code that runs inside your browser (Canvas, <a href="https://pdf-lib.js.org/" target="_blank" rel="noopener">pdf-lib</a>, <a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">PDF.js</a> and <a href="https://github.com/ffmpegwasm/ffmpeg.wasm" target="_blank" rel="noopener">ffmpeg.wasm</a>). There is no server that receives your files. Open your browser's developer tools and watch the Network tab: your files are never sent anywhere.</p>
     </section>
   </main>
 
   <footer class="wrap foot">
-    MIT licensed and free forever. Built on <a href="https://ffmpegwasm.netlify.app/" target="_blank" rel="noopener">ffmpeg.wasm</a>,
-    <a href="https://pdf-lib.js.org/" target="_blank" rel="noopener">pdf-lib</a>,
-    <a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">PDF.js</a> and
-    <a href="https://stuk.github.io/jszip/" target="_blank" rel="noopener">JSZip</a>.
+    MIT licensed · <a href="https://github.com/xeej0/openmorph" target="_blank" rel="noopener">View source / report a bug</a>
   </footer>
+
+  <div class="global-drop" id="global-drop" hidden><div>Drop to add files</div></div>
+  <div class="toast" id="toast" role="status" hidden></div>
 
   <script type="module" src="/src/main.js"></script>
 </body>
