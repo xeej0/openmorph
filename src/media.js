@@ -123,6 +123,9 @@ export function initMedia() {
   const step = $('#tab-media .step');
   const fmtSel = $('#media-format'), sizeMode = $('#media-sizemode');
   let running = false, cancelled = false;
+  let formatTouched = false; // once the user picks an output, never change it for them
+  const isAudioFile = (f) => /^audio\//.test(f.type) || /\.(mp3|wav|m4a|aac|flac|oga|opus|wma|aiff?)$/i.test(f.name);
+  const VIDEO_PRESETS = ['shrink', 'discord', '25mb', 'mp4', 'gif'];
 
   const label = () => {
     const n = box.files.length;
@@ -139,7 +142,12 @@ export function initMedia() {
     onChange: (f) => {
       // start downloading the engine in the background as soon as there is work for it
       if (f.length && !ffmpeg) getFFmpeg().catch(() => {});
-      step.hidden = !f.length; label(); } });
+      // audio-only input: offer audio outputs instead of "convert to MP4"
+      const allAudio = f.length > 0 && f.every(isAudioFile);
+      if (!formatTouched && f.length) fmtSel.value = allAudio ? 'mp3' : 'mp4';
+      $$('#media-presets button').forEach((b) => { if (VIDEO_PRESETS.includes(b.dataset.p)) b.hidden = allAudio; });
+      $('#media-presets [data-p=mp3]').textContent = allAudio ? 'To MP3' : 'Extract MP3';
+      step.hidden = !f.length; syncOpts(); } });
 
   const syncOpts = () => {
     const f = fmtSel.value, audio = AUDIO.includes(f), gif = f === 'gif', target = sizeMode.value === 'target';
@@ -153,7 +161,7 @@ export function initMedia() {
     }
     label();
   };
-  fmtSel.addEventListener('change', syncOpts);
+  fmtSel.addEventListener('change', () => { formatTouched = true; syncOpts(); });
   sizeMode.addEventListener('change', syncOpts);
   syncOpts();
 
@@ -168,6 +176,7 @@ export function initMedia() {
   $('#media-presets').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-p]'); if (!b) return;
     const p = presets[b.dataset.p];
+    formatTouched = true;
     fmtSel.value = p.format;
     if (p.size) sizeMode.value = p.size;
     if (p.crf) $('#media-crf').value = p.crf;
