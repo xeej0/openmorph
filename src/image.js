@@ -78,7 +78,7 @@ export function initImage() {
   let running = false;
   const step = $('#tab-image .step');
   step.hidden = true;
-  const box = fileBox({ inputId: 'img-files', listEl: $('#img-list'), accept: isImage, onChange: (f) => { step.hidden = !f.length; label(); if (!running) results.reset(); } });
+  const box = fileBox({ inputId: 'img-files', listEl: $('#img-list'), accept: isImage, onChange: (f) => { step.hidden = !f.length; label(); } });
 
   const syncQ = () => {
     $('#img-q-val').textContent = q.value + '%';

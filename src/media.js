@@ -139,7 +139,7 @@ export function initMedia() {
     onChange: (f) => {
       // start downloading the engine in the background as soon as there is work for it
       if (f.length && !ffmpeg) getFFmpeg().catch(() => {});
-      step.hidden = !f.length; label(); if (!running) { results.reset(); prog.hidden = true; } } });
+      step.hidden = !f.length; label(); } });
 
   const syncOpts = () => {
     const f = fmtSel.value, audio = AUDIO.includes(f), gif = f === 'gif', target = sizeMode.value === 'target';

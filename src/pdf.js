@@ -125,7 +125,7 @@ export function initPdf() {
   const box = fileBox({
     inputId: 'pdf-files', listEl: $('#pdf-list'), sortable: true,
     accept: (f) => MODES[mode].accept(f),
-    onChange: (f) => { step.hidden = !f.length || !MODES[mode].opts; label(); if (!running) results.reset(); },
+    onChange: (f) => { step.hidden = !f.length || !MODES[mode].opts; label(); },
   });
 
   const setMode = (m) => {
@@ -139,7 +139,7 @@ export function initPdf() {
     $('#pdf-opts').innerHTML = M.opts;
     box.input.accept = M.acceptAttr;
     // keep files that still fit the new tool
-    if (prev.accept !== M.accept) box.clear(); else { label(); step.hidden = !box.files.length || !M.opts; results.reset(); }
+    if (prev.accept !== M.accept) box.clear(); else { label(); step.hidden = !box.files.length || !M.opts; }
     const lvl = $('#p-level');
     if (lvl) {
       const sync = () => { const light = lvl.value === 'light'; $('.jq').hidden = light; $('.lvl-note').hidden = light; };
