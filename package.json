@@ -31,7 +31,7 @@
     "type": "git",
     "url": "https://github.com/xeej0/openmorph.git"
   },
-  "homepage": "https://openmorph.vercel.app",
+  "homepage": "https://openmorph.xeej.app",
   "private": true,
   "keywords": [
     "file-converter",

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const FX = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const fx = (...n) => n.map((x) => FX + x);
 
-// BASE_URL=https://openmorph.vercel.app/ npm test  runs against a deployed site instead
+// BASE_URL=https://openmorph.xeej.app/ npm test  runs against a deployed site instead
 const server = process.env.BASE_URL ? null : await preview({ preview: { port: 4317, strictPort: true }, logLevel: 'silent' });
 const BASE = process.env.BASE_URL || 'http://localhost:4317/';
 const browser = await chromium.launch();

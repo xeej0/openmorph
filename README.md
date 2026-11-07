@@ -6,7 +6,7 @@
 
 A free, open-source alternative to the "convert X to Y" websites. No uploads, no accounts, no limits, no watermarks.
 
-**[Open the app → openmorph.vercel.app](https://openmorph.vercel.app)**
+**[Open the app → openmorph.xeej.app](https://openmorph.xeej.app)**
 
 [![CI](https://github.com/xeej0/openmorph/actions/workflows/ci.yml/badge.svg)](https://github.com/xeej0/openmorph/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-5b5bf7.svg)](LICENSE)
@@ -75,7 +75,7 @@ npm run dev
 |---|---|
 | `npm run dev` | Dev server with hot reload |
 | `npm run build` | Static site in `dist/` |
-| `npm test` | Run after a build. 34 end-to-end checks in Chromium under the production security headers. `BASE_URL=https://openmorph.vercel.app/ npm test` checks the live site |
+| `npm test` | Run after a build. 37 end-to-end checks in Chromium under the production security headers. `BASE_URL=https://openmorph.xeej.app/ npm test` checks the live site |
 
 Requires Node 20+. Any static host works. For Vercel, import the repo (settings come from `vercel.json`) or:
 
