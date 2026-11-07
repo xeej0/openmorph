@@ -55,7 +55,8 @@ function route(files) {
     else { image.box.add(imgs); if (!pdfs.length && !avs.length) show('image'); }
   }
   if (pdfs.length) {
-    if (current !== 'pdf' || pdf.mode === 'img2pdf') pdf.setMode(pdfs.length > 1 ? 'merge' : 'compress');
+    // keep the PDF tool the user picked; only "Images → PDF" can't take PDFs, so pick a sensible one then
+    if (pdf.mode === 'img2pdf') pdf.setMode(pdfs.length > 1 ? 'merge' : 'compress');
     pdf.box.add(pdfs); if (!avs.length) show('pdf');
   }
   if (avs.length) { media.box.add(avs); show('media'); }
